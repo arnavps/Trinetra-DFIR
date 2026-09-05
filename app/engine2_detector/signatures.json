@@ -1,0 +1,21 @@
+{
+  "_comment": "Starting hypotheses for OEM signatures derived from public reverse-engineering literature. Note: Per CLAUDE.md invariants, byte offsets and magic signatures are unverified placeholders until confirmed against real acquired hardware.",
+  "signatures": [
+    {
+      "oem": "Dahua",
+      "signature_id": "dahua_dhfs_v1",
+      "offset": 0,
+      "pattern_hex": "44484653",
+      "description": "Dahua DHFS superblock ASCII signature 'DHFS'",
+      "confidence_note": "Deterministic primary signature hypothesis from literature"
+    },
+    {
+      "oem": "Hikvision",
+      "signature_id": "hikvision_hikfat_v1",
+      "offset": 0,
+      "pattern_hex": "48494b564953494f4e",
+      "description": "Hikvision HIKFAT superblock ASCII signature 'HIKVISION'",
+      "confidence_note": "Deterministic primary signature hypothesis from literature"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+*.so
+*.dll
+
+# C Extensions & Compiled Rust Targets
+target/
+rust_core/target/
+build/lib/
+dist/
+*.egg-info/
+
+# Python Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# Large Disk Images, Databases & Cases
+*.dd
+*.raw
+*.E01
+*.img
+*.db
+*.sqlite
+*.sqlite3
+case_audit.db
+demo_case/
+dds/
+
+# Large AI Model Weights (Tracked via models/manifest.json)
+models/*.onnx
+models/*.bin
+models/*.pt
+models/*.pth
+models/*.safetensors
+!models/manifest.json
+
+# Test & IDE Caches
+.pytest_cache/
+.coverage
+htmlcov/
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS Generated Artifacts
+.DS_Store
+Thumbs.db
+desktop.ini

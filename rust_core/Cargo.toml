@@ -1,0 +1,12 @@
+[package]
+name = "trinetra_rustcore"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+pyo3 = { version = "0.20.3", features = ["extension-module", "abi3-py311"] }
+sha2 = "0.10"
+md-5 = "0.10"

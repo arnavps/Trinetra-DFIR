@@ -18,8 +18,8 @@ def qapp():
 
 def test_main_window_navigation_and_views(qapp):
     window = MainWindow()
-    assert window.nav_list.count() == 5
-    assert window.stack.count() == 5
+    assert window.nav_list.count() == 6
+    assert window.stack.count() == 6
 
     # Switch views via nav sidebar
     window.nav_list.setCurrentRow(1)

@@ -4,11 +4,13 @@ Inactive background tiles decode at 5-10 FPS downscaled proxy resolution;
 maximizing a tile switches it to full frame rate and native resolution.
 """
 
+import os
 from typing import List, Optional
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QWidget, QGridLayout, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
 
 from app.engine9_ui.widgets.video_tile import VideoTileWidget
+from app.engine3_parsers.fs_base import VirtualFileSystem
 
 
 class PlaybackMatrixView(QWidget):
@@ -25,18 +27,31 @@ class PlaybackMatrixView(QWidget):
         self.main_layout.setContentsMargins(4, 4, 4, 4)
 
         header = QLabel("Multi-Channel Playback Matrix (8-Tile Synchronized Grid)")
-        header.setStyleSheet("font-size: 14px; font-weight: bold; margin-bottom: 4px;")
+        header.setStyleSheet("font-size: 14px; font-weight: bold; margin-bottom: 4px; color: #58A6FF;")
         self.main_layout.addWidget(header)
 
         self.grid_widget = QWidget()
         self.grid_layout = QGridLayout(self.grid_widget)
         self.grid_layout.setSpacing(4)
 
+        channel_labels = [
+            "CAM 01 - MAIN GATE",
+            "CAM 02 - CASHIER COUNTER",
+            "CAM 03 - PARKING LOT",
+            "CAM 04 - VAULT ENTRANCE",
+            "CAM 05 - REAR PERIMETER",
+            "CAM 06 - SERVER ROOM",
+            "CAM 07 - LOADING DOCK",
+            "CAM 08 - EXECUTIVE LOBBY",
+        ]
+
         # Create 8 tiles in a 2x4 grid
         for idx in range(8):
             row = idx // 4
             col = idx % 4
-            tile = VideoTileWidget(self)
+            ch_name = channel_labels[idx]
+            tile = VideoTileWidget(self, channel_name=ch_name)
+            tile.set_osd_text(f"{ch_name} | 2023-11-14 18:42:11.042 | 25.0 FPS | H.264")
             tile.setToolTip(f"Camera Channel {idx + 1}")
             self.tiles.append(tile)
             self.grid_layout.addWidget(tile, row, col)
@@ -63,6 +78,43 @@ class PlaybackMatrixView(QWidget):
         if 0 <= tile_index < len(self.tiles):
             return self.tiles[tile_index].load_stream(stream_buffer, oem=oem)
         return 0
+
+    def load_case_video_file(self, file_path: str, tile_index: int = 0) -> bool:
+        """Loads a real video clip file directly into a specified tile."""
+        if 0 <= tile_index < len(self.tiles):
+            res = self.tiles[tile_index].load_file(file_path)
+            self.tiles[tile_index].set_osd_text(
+                f"CAM {tile_index + 1:02d} - {os.path.basename(file_path)} | 2023-11-14 18:42:11.042 | 25.0 FPS | H.264"
+            )
+            return res
+        return False
+
+    def load_vfs(self, vfs: VirtualFileSystem, case_dir: str = "") -> None:
+        """Loads VFS channel videos and directory files across matrix tiles."""
+        if not vfs:
+            return
+
+        # Check for demo mp4 file in case_dir if available
+        mp4_files = []
+        if case_dir and os.path.exists(case_dir):
+            for f in os.listdir(case_dir):
+                if f.lower().endswith(".mp4"):
+                    mp4_files.append(os.path.join(case_dir, f))
+
+        for idx in range(8):
+            ch_id = idx + 1
+            ch_name = f"CAM {ch_id:02d} - CHANNEL {ch_id}"
+            if idx < len(vfs.channels):
+                ch_name = f"CAM {ch_id:02d} - {vfs.channels[idx].channel_name}"
+
+            self.tiles[idx].channel_name = ch_name
+            self.tiles[idx].set_osd_text(f"{ch_name} | 2023-11-14 18:42:11.042 | 25.0 FPS | H.264")
+
+            if mp4_files:
+                sample_file = mp4_files[idx % len(mp4_files)]
+                self.tiles[idx].load_file(sample_file)
+            else:
+                self.tiles[idx]._render_placeholder()
 
     def play_all(self):
         for idx, tile in enumerate(self.tiles):

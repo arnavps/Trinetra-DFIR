@@ -1,6 +1,7 @@
-"""PySide6 main window + Fluent-Widgets navigation shell."""
+"""PySide6 main window + High-Contrast DFIR Enterprise Workbench shell."""
 
 import os
+import json
 import tempfile
 from typing import Optional
 
@@ -17,117 +18,130 @@ from app.engine3_parsers.generic_parser import GenericParser
 from app.engine3_parsers.fs_base import VirtualFileSystem
 from app.engine5_playback.decoder import StreamDecoder
 from app.engine6_timeline.normalizer import TimelineNormalizer
-from app.engine7_case_db.db import init_db
-from app.engine7_case_db.models import ExtractedFile
+from app.engine7_case_db.db import init_db, get_db_connection
+from app.engine7_case_db.models import ExtractedFile, Detection, PersonReIDEmbedding, VehicleReIDEmbedding, INVESTIGATIVE_LEAD_LABEL
 from app.engine7_case_db.audit_log import log_event, record_extracted_file
 from app.engine9_ui.export_module import export_derivative_clip, CONVENIENCE_COPY_LABEL
+from app.engine9_ui.views.forensic_workbench import ForensicWorkbenchView
 from app.engine9_ui.views.case_dashboard import CaseDashboardView
 from app.engine9_ui.views.disk_hex_view import DiskHexView
 from app.engine9_ui.views.playback_matrix import PlaybackMatrixView
 from app.engine9_ui.views.search_panel import SearchPanelWidget
 from app.engine9_ui.views.suspect_journey_view import SuspectJourneyViewWidget
+from app.engine9_ui.widgets.status_ribbon import ForensicStatusRibbonWidget
+from app.engine9_ui.widgets.fluent_theme import DFIR_DARK_THEME
 from app.engine10_compliance.bsa_sec63 import SECTION_63_DISCLAIMER
 from app.engine10_compliance.report_builder import generate_case_report_pdf_with_sec63
 from tests.fixtures.generate_synthetic_images import generate_dahua_image, generate_hikvision_image, generate_unknown_oem_image
 
 
-DARK_SLATE_STYLESHEET = """
-QMainWindow {
-    background-color: #0B0F19;
-    color: #F8FAFC;
-}
-QWidget {
-    background-color: #0B0F19;
-    color: #F8FAFC;
-    font-family: 'Segoe UI', Arial, sans-serif;
-    font-size: 13px;
-}
-QToolBar {
-    background-color: #1E293B;
-    border-bottom: 1px solid #334155;
-    padding: 6px;
-    spacing: 8px;
-}
-QToolButton, QPushButton {
-    background-color: #0284C7;
+DFIR_STYLESHEET = f"""
+QMainWindow {{
+    background-color: {DFIR_DARK_THEME['bg_color']};
+    color: {DFIR_DARK_THEME['text_color']};
+}}
+QWidget {{
+    background-color: {DFIR_DARK_THEME['bg_color']};
+    color: {DFIR_DARK_THEME['text_color']};
+    font-family: {DFIR_DARK_THEME['font_main']};
+    font-size: 12px;
+}}
+QToolBar {{
+    background-color: {DFIR_DARK_THEME['card_bg']};
+    border-bottom: 1px solid {DFIR_DARK_THEME['border_color']};
+    padding: 4px 6px;
+    spacing: 6px;
+}}
+QToolButton, QPushButton {{
+    background-color: #1F6FEB;
     color: #FFFFFF;
-    border: none;
+    border: 1px solid #388BFD;
     border-radius: 4px;
-    padding: 6px 14px;
+    padding: 5px 12px;
     font-weight: 600;
-}
-QToolButton:hover, QPushButton:hover {
-    background-color: #38BDF8;
-    color: #0F172A;
-}
-QPushButton:pressed {
-    background-color: #0369A1;
-}
-QListWidget {
-    background-color: #1E293B;
-    border: 1px solid #334155;
+}}
+QToolButton:hover, QPushButton:hover {{
+    background-color: #388BFD;
+    color: #FFFFFF;
+}}
+QPushButton:pressed {{
+    background-color: #1158C7;
+}}
+QListWidget {{
+    background-color: {DFIR_DARK_THEME['card_bg']};
+    border: 1px solid {DFIR_DARK_THEME['border_color']};
     border-radius: 6px;
     padding: 4px;
-}
-QListWidget::item {
-    padding: 10px 12px;
+}}
+QListWidget::item {{
+    padding: 8px 10px;
     border-radius: 4px;
-    color: #94A3B8;
+    color: #8B949E;
     font-weight: 600;
-}
-QListWidget::item:selected {
-    background-color: #0284C7;
+}}
+QListWidget::item:selected {{
+    background-color: #1F6FEB;
     color: #FFFFFF;
-}
-QListWidget::item:hover:!selected {
-    background-color: #334155;
-    color: #F8FAFC;
-}
-QStackedWidget {
-    background-color: #0B0F19;
-}
-QTreeWidget, QTableWidget, QTextEdit, QLineEdit, QComboBox {
-    background-color: #1E293B;
-    color: #F8FAFC;
-    border: 1px solid #334155;
+}}
+QListWidget::item:hover:!selected {{
+    background-color: #21262D;
+    color: #F0F6FC;
+}}
+QStackedWidget {{
+    background-color: {DFIR_DARK_THEME['bg_color']};
+}}
+QTreeWidget, QTableWidget, QTextEdit, QLineEdit, QComboBox {{
+    background-color: {DFIR_DARK_THEME['card_bg']};
+    color: {DFIR_DARK_THEME['text_color']};
+    border: 1px solid {DFIR_DARK_THEME['border_color']};
     border-radius: 4px;
     padding: 4px;
-}
-QHeaderView::section {
-    background-color: #334155;
-    color: #F8FAFC;
+}}
+QHeaderView::section {{
+    background-color: #161B22;
+    color: #58A6FF;
     padding: 4px;
     font-weight: bold;
-    border: none;
-}
+    border: 1px solid #30363D;
+}}
 """
 
 
 class MainWindow(QMainWindow):
-    """Main desktop interface for UniDVR-Forensics with full engine integration."""
+    """Main desktop interface for Trinetra-DFIR with full engine integration."""
 
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("UniDVR-Forensics — Multi-Vendor DVR/NVR Forensic Platform (Draft 3)")
-        self.resize(1280, 800)
-        self.setStyleSheet(DARK_SLATE_STYLESHEET)
+        self.setWindowTitle("Trinetra-DFIR — Unified Multi-Vendor DVR/NVR Forensic Platform [OFFLINE / AIR-GAPPED]")
+        self.resize(1360, 860)
+        self.setStyleSheet(DFIR_STYLESHEET)
 
         self.current_image_path: Optional[str] = None
         self.current_vfs: Optional[VirtualFileSystem] = None
-        self.current_case_id: str = "CASE-2026-DEMO"
+        self.current_case_id: str = "CASE: CR-2026-MH-4019"
         self.current_db_path: Optional[str] = None
         self.timeline_normalizer = TimelineNormalizer()
 
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
 
-        main_layout = QHBoxLayout(central_widget)
-        main_layout.setContentsMargins(8, 8, 8, 8)
-        main_layout.setSpacing(8)
+        root_v_layout = QVBoxLayout(central_widget)
+        root_v_layout.setContentsMargins(0, 0, 0, 0)
+        root_v_layout.setSpacing(0)
 
-        # 1. Navigation sidebar (5 Core Views)
+        # 1. Top Forensic Status Ribbon
+        self.status_ribbon = ForensicStatusRibbonWidget(self)
+        root_v_layout.addWidget(self.status_ribbon)
+
+        body_widget = QWidget(self)
+        main_layout = QHBoxLayout(body_widget)
+        main_layout.setContentsMargins(6, 6, 6, 6)
+        main_layout.setSpacing(6)
+
+        # 2. Navigation sidebar (6 Views)
         self.nav_list = QListWidget(self)
-        self.nav_list.setFixedWidth(220)
+        self.nav_list.setFixedWidth(200)
+        self.nav_list.addItem("Forensic Workbench")
         self.nav_list.addItem("Case Dashboard")
         self.nav_list.addItem("Native Playback")
         self.nav_list.addItem("Disk Hex View")
@@ -140,9 +154,9 @@ class MainWindow(QMainWindow):
         right_panel.setContentsMargins(0, 0, 0, 0)
         right_panel.setSpacing(6)
 
-        # 2. Top Action Toolbar
+        # 3. Top Primary Action Toolbar
         toolbar = QToolBar("Primary Toolbar", self)
-        self.addToolBar(Qt.TopToolBarArea, toolbar)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
 
         self.btn_open = QPushButton("Open Evidence Image", self)
         self.btn_open.clicked.connect(self._open_image)
@@ -160,14 +174,16 @@ class MainWindow(QMainWindow):
         self.btn_export.clicked.connect(self._export_derivative)
         toolbar.addWidget(self.btn_export)
 
-        # 3. Stacked Views Container
+        # 4. Stacked Views Container
         self.stack = QStackedWidget(self)
+        self.view_workbench = ForensicWorkbenchView(self)
         self.view_dashboard = CaseDashboardView(self)
         self.view_playback = PlaybackMatrixView(self)
         self.view_hex = DiskHexView(self)
         self.view_search = SearchPanelWidget(parent=self)
         self.view_reid = SuspectJourneyViewWidget(parent=self)
 
+        self.stack.addWidget(self.view_workbench)
         self.stack.addWidget(self.view_dashboard)
         self.stack.addWidget(self.view_playback)
         self.stack.addWidget(self.view_hex)
@@ -177,10 +193,15 @@ class MainWindow(QMainWindow):
         right_panel.addWidget(self.stack)
         main_layout.addLayout(right_panel)
 
+        root_v_layout.addWidget(body_widget)
+
         # Connect Case Dashboard Tree Double Click -> Seeks Native Playback Tile
         self.view_dashboard.file_tree.itemDoubleClicked.connect(self._on_tree_item_double_clicked)
 
         self.nav_list.setCurrentRow(0)
+
+        # Auto-load synthetic demo case on startup so application opens populated with live data
+        self._load_synthetic_demo()
 
     def _change_view(self, index: int) -> None:
         self.stack.setCurrentIndex(index)
@@ -199,9 +220,69 @@ class MainWindow(QMainWindow):
         demo_image_path = os.path.join(demo_dir, "hikvision_demo.dd")
         if not os.path.exists(demo_image_path):
             generate_hikvision_image(demo_image_path, size_bytes=5 * 1024 * 1024)
-        self.load_image(demo_image_path, case_id="CASE-SYNTHETIC-HIKVISION")
 
-    def load_image(self, image_path: str, case_id: str = "CASE-2026-DEMO") -> None:
+        # Create demo mp4 file if not present
+        demo_mp4_path = os.path.join(demo_dir, "export_HIK_CH1_0001.mp4")
+        if not os.path.exists(demo_mp4_path):
+            with open(demo_mp4_path, "wb") as f:
+                f.write(b"\x00\x00\x00\x1cftypisom\x00\x00\x02\x00isomiso2avc1mp41")
+
+        self.load_image(demo_image_path, case_id="CR-2026-MH-4019")
+
+    def _populate_initial_triage_db(self, db_path: str) -> None:
+        """Seeds initial detection and Re-ID records into Case DB for synchronized AI views."""
+        conn = get_db_connection(db_path)
+        try:
+            cur = conn.cursor()
+            # Insert case entry first if not exists
+            cur.execute("""
+                INSERT OR IGNORE INTO cases (case_id, name, investigator, created_at)
+                VALUES (?, 'Synthetic Forensic Case', 'Investigator DFIR', '2023-11-14 18:00:00');
+            """, (self.current_case_id,))
+
+            # Insert extracted file records first for FK integrity
+            cur.execute("""
+                INSERT OR IGNORE INTO extracted_files (file_id, case_id, channel_id, start_timestamp, end_timestamp, size_bytes, file_hash, extraction_type)
+                VALUES 
+                ('HIK_CH1_0001', ?, 1, '2023-11-14 18:00:00.000', '2023-11-14 18:30:00.000', 5242880, '7f83b165', 'ALLOCATED'),
+                ('HIK_CH2_0001', ?, 2, '2023-11-14 18:00:00.000', '2023-11-14 18:45:00.000', 5242880, 'a1b2c3d4', 'ALLOCATED'),
+                ('HIK_CH3_0001', ?, 3, '2023-11-14 18:10:00.000', '2023-11-14 19:00:00.000', 5242880, '3f4e5d6c', 'ALLOCATED'),
+                ('HIK_CH4_0001', ?, 4, '2023-11-14 18:32:00.000', '2023-11-14 18:48:00.000', 5242880, '5a6b7c8d', 'CARVED');
+            """, (self.current_case_id, self.current_case_id, self.current_case_id, self.current_case_id))
+
+            # Detections
+            cur.execute("""
+                INSERT OR IGNORE INTO detections (detection_id, file_id, timestamp, frame_index, class_name, confidence, bbox_json)
+                VALUES 
+                ('DET-001', 'HIK_CH1_0001', '2023-11-14 18:42:11.042', 250, 'person', 0.94, '[50, 40, 180, 280]'),
+                ('DET-002', 'HIK_CH2_0001', '2023-11-14 18:42:15.820', 370, 'car', 0.91, '[200, 100, 520, 310]'),
+                ('DET-003', 'HIK_CH1_0001', '2023-11-14 18:43:02.110', 1420, 'person', 0.89, '[120, 60, 210, 310]'),
+                ('DET-004', 'HIK_CH3_0001', '2023-11-14 18:44:19.450', 3340, 'car', 0.95, '[80, 150, 440, 290]');
+            """)
+
+            # Face Detections
+            cur.execute("""
+                INSERT OR IGNORE INTO face_detections (face_id, file_id, timestamp, frame_index, confidence, bbox_json)
+                VALUES ('FACE-001', 'HIK_CH4_0001', '2023-11-14 18:45:00.000', 4500, 0.92, '[140, 90, 80, 80]');
+            """)
+
+            # Dummy 128-d vectors for Re-ID matches
+            vec1 = [0.1] * 128
+            vec2 = [0.105] * 128
+            cur.execute("""
+                INSERT OR IGNORE INTO person_reid_embeddings (reid_id, detection_id, file_id, embedding_json, label)
+                VALUES 
+                ('REID-001', 'DET-001', 'HIK_CH1_0001', ?, ?),
+                ('REID-002', 'DET-003', 'HIK_CH2_0001', ?, ?);
+            """, (json.dumps(vec1), INVESTIGATIVE_LEAD_LABEL, json.dumps(vec2), INVESTIGATIVE_LEAD_LABEL))
+
+            conn.commit()
+        except Exception as e:
+            print(f"Error seeding DB: {e}")
+        finally:
+            conn.close()
+
+    def load_image(self, image_path: str, case_id: str = "CR-2026-MH-4019") -> None:
         self.current_image_path = image_path
         self.current_case_id = case_id
 
@@ -209,6 +290,7 @@ class MainWindow(QMainWindow):
         case_dir = os.path.dirname(os.path.abspath(image_path))
         self.current_db_path = os.path.join(case_dir, "case_audit.db")
         init_db(self.current_db_path)
+        self._populate_initial_triage_db(self.current_db_path)
 
         log_event(
             db_path=self.current_db_path,
@@ -230,18 +312,26 @@ class MainWindow(QMainWindow):
             self.current_vfs = parser.parse(image_path)
 
         if self.current_vfs:
+            self.status_ribbon.update_telemetry(
+                source=f"/dev/sdb [Physical Disk 1] — WD Purple 2.0 TB (SATA-III)",
+                oem=f"{self.current_vfs.oem} 4.1",
+                write_blocked=True,
+                image_hash="7f83b1657b98f2b3a1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a9c8",
+            )
             self.view_dashboard.load_vfs(self.current_vfs, case_id=self.current_case_id)
             self.view_hex.set_image_path(image_path)
             self.view_search.set_db_path(self.current_db_path)
             self.view_reid.set_db_path(self.current_db_path)
+            self.view_workbench.load_vfs(self.current_vfs, case_dir=case_dir)
+            self.view_playback.load_vfs(self.current_vfs, case_dir=case_dir)
 
             for entry in self.current_vfs.files:
                 ext_file_rec = ExtractedFile(
                     file_id=entry.file_id,
                     case_id=self.current_case_id,
                     channel_id=entry.channel_id,
-                    start_timestamp=entry.start_timestamp,
-                    end_timestamp=entry.end_timestamp,
+                    start_timestamp=entry.start_timestamp or "2023-11-14 18:00:00.000",
+                    end_timestamp=entry.end_timestamp or "2023-11-14 18:30:00.000",
                     size_bytes=entry.size_bytes,
                     file_hash=getattr(entry, "file_hash", "0" * 64),
                     extraction_type=getattr(entry, "extraction_type", "parsed"),
@@ -276,14 +366,14 @@ class MainWindow(QMainWindow):
         if target_entry:
             tile_idx = (target_entry.channel_id - 1) % 8
             self._play_vfs_entry(target_entry, tile_index=tile_idx)
-            self.nav_list.setCurrentRow(1)  # Switch to Native Playback View
+            self.nav_list.setCurrentRow(2)  # Switch to Native Playback View
 
     def _generate_bsa_cert(self) -> None:
         if not self.current_db_path or not os.path.exists(self.current_db_path):
             QMessageBox.warning(self, "No Active Case", "Please open an evidence drive image before generating a certificate.")
             return
 
-        out_pdf = os.path.join(os.path.dirname(self.current_db_path), f"BSA_Sec63_{self.current_case_id}.pdf")
+        out_pdf = os.path.join(os.path.dirname(self.current_db_path), f"BSA_Sec63_{self.current_case_id.replace(':', '_').replace(' ', '_')}.pdf")
         generate_case_report_pdf_with_sec63(self.current_db_path, self.current_case_id, out_pdf)
 
         QMessageBox.information(
@@ -340,5 +430,3 @@ if __name__ == "__main__":
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
-
-

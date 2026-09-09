@@ -1,18 +1,17 @@
-# UniDVR-Forensics / Tri-Netra (Draft 3)
+# Tri-Netra 
 ### Multi-Vendor DVR/NVR Forensic Analysis Platform for Standardized Acquisition, Recovery, and Analysis of Surveillance Evidence
 
 **Problem Statement:** SIH26150  
 **Sponsoring Organisation:** National Technical Research Organisation (NTRO)  
 **Theme:** Blockchain & Cybersecurity — Digital Forensics & Data Sanitization  
-**Document & Implementation Status:** Draft 3 Architecture — Format-Preserving Native Evidence Engine  
 
 ---
 
-## 📌 Executive Summary & Architectural Shift (Draft 3)
+## 📌 Executive Summary & Architectural Shift 
 
 Modern CCTV digital forensics faces a major legal and technical challenge: converting proprietary DVR/NVR video streams into standard containers like MP4 or MKV for viewing — even losslessly (`-c:v copy`) — alters file hashes. Courts regularly reject converted video files as primary evidentiary artifacts.
 
-**UniDVR-Forensics (Tri-Netra)** addresses this through an architectural, format-preserving design:
+**Tri-Netra** addresses this through an architectural, format-preserving design:
 1. **Zero Primary Conversion**: Footage is parsed, carved, and decoded **in-memory only** directly from original proprietary bitstreams (`.dav`, `.hik`, `.raw`). No converted files are ever written to disk on the primary evidentiary path.
 2. **Strict Derivative Isolation**: Derivative MP4/MKV exports exist strictly via an investigator-triggered export module (`export_module.py`). Derivative files receive independent SHA-256 hashes, distinct audit entries, and the mandatory label: `"convenience copy - not for submission as primary evidence"`.
 3. **Read-Only AI Advisory Lane**: All AI-assisted triage outputs (YOLOv8n detection, SCRFD face crops, FastReID suspect tracking, ANPR, OpenCLIP semantic search) are tagged with `INVESTIGATIVE_LEAD_LABEL` ("investigative lead, not an identification") and write strictly to annotation tables.

@@ -1,9 +1,9 @@
 # Tri-Netra — Reality Reconciliation & System Validation Report
 
 **Validation Date**: September 12, 2026  
-**Test Suite**: 51 Automated Tests (50 Unit Tests + 1 Full End-to-End Integration Suite)  
+**Test Suite**: 53 Automated Tests (52 Unit Tests + 1 Full End-to-End Integration Suite)  
 **Target Environment**: Windows 11 x64 / Linux x64 (CPU-Only, Air-Gapped, Headless PySide6 supported)  
-**Overall Status**: **PASS (51/51 Tests Passing — 100% Success Rate)**  
+**Overall Status**: **PASS (53/53 Tests Passing — 100% Success Rate)**  
 
 ---
 
@@ -33,12 +33,12 @@ Tri-Netra underwent an independent audit and truth-alignment hardening pass to e
 | **P1 3.3** | Cross-platform write-block check | Hardened `writeblock_check.py` with dual direct sector write attempts; added root/Administrator edge case simulation. | `test_compliance.py` (2/2) |
 | **P1 3.4** | Remuxer single-caller static invariant | Added AST/regex static analysis test ensuring `remuxer.py` is imported strictly by `export_module.py`. | `test_remuxer_single_caller.py` (1/1) |
 | **P1 3.5** | Sandbox decoder process isolation | Verified `security/sandbox.py` process wrapping for decoder, handling truncated NAL streams safely without crashing main app. | `test_decoder_no_persistent_files.py` (2/2) |
-| **P1 3.6** | Headless test suite execution | Configured `QT_QPA_PLATFORM=offscreen` in `conftest.py`. Cargo check & Pytest pass 100% headlessly. | `pytest` (51/51 PASS) |
+| **P1 3.6** | Headless test suite execution | Configured `QT_QPA_PLATFORM=offscreen` in `conftest.py`. Cargo check & Pytest pass 100% headlessly. | `pytest` (53/53 PASS) |
 | **P2** | Uniview (UFS) & physical hardware verification | UFS routes to generic carving fallback. Documented physical hardware byte offset validation as primary real-world risk item. | `validation_report.md` (Known Limitations) |
 
 ---
 
-## 3. Test Suite Execution Summary (51 / 51 Passed)
+## 3. Test Suite Execution Summary (53 / 53 Passed)
 
 | Engine / Component Module | Test File | Passed / Total | Key Verified Behaviors |
 | :--- | :--- | :--- | :--- |
@@ -47,6 +47,7 @@ Tri-Netra underwent an independent audit and truth-alignment hardening pass to e
 | **Engine 2 (Detector & Classifier)** | `test_detector.py` | 3 / 3 | OEM signature matching & Random Forest sector fallback classifier |
 | **Engine 3 (Hikvision HIKFAT)** | `test_hikfat_parser.py` | 4 / 4 | HIKFAT Master Index Table parsing, superblock validation, channel mapping |
 | **Engine 3 (Dahua DHFS)** | `test_dhfs_parser.py` | 3 / 3 | DHFS allocation table parsing, block header validation, channel mapping |
+| **Engine 3 (HeimVision HFS)** | `test_heimvision_parser.py` | 2 / 2 | HeimVision HFS Master Index Table parsing, superblock magic, channel mapping |
 | **Engine 4 (Carver & Reconstructor)** | `test_carver.py` | 3 / 3 | Rust PyO3 `find_nal_start_codes` NAL scanning, GOP reassembly, fragment tagging |
 | **Engine 5 (Native Playback & Decoder)**| `test_decoder.py` | 2 / 2 | In-memory frame extraction, stream header validation, SmartCodec handling |
 | **Engine 5 (Ephemeral File Isolation)** | `test_decoder_no_persistent_files.py` | 2 / 2 | Ephemeral tempfile cleanup & sandbox error handling on malformed streams |

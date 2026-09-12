@@ -185,6 +185,68 @@ def generate_unknown_oem_image(output_path: str, size_bytes: int = 10 * 1024 * 1
     return output_path
 
 
+def generate_heimvision_image(output_path: str, size_bytes: int = 10 * 1024 * 1024, seed: int = 42) -> str:
+    """
+    Produces a synthetic .dd image with HeimVision HFS superblock signature at offset 0,
+    a HEIMINDEX Master Index Table, and embedded playable video stream payload.
+    """
+    from app.engine3_parsers import heimvision_constants as heim_const
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    rng = random.Random(seed)
+
+    index_offset = size_bytes - heim_const.HEIMVISION_INDEX_TABLE_OFFSET_FROM_END
+    if index_offset <= len(heim_const.HEIMVISION_SUPERBLOCK_MAGIC):
+        raise ValueError("size_bytes too small to hold HeimVision superblock and index table.")
+
+    video_bytes = create_tiny_h264_stream(num_frames=5)
+    video_sec_cnt = (len(video_bytes) + 511) // 512
+
+    with open(output_path, "wb") as f:
+        f.write(heim_const.HEIMVISION_SUPERBLOCK_MAGIC)
+
+        start_sec = 100
+        sec_offset = start_sec * 512
+
+        pad1 = sec_offset - len(heim_const.HEIMVISION_SUPERBLOCK_MAGIC)
+        f.write(rng.randbytes(pad1))
+
+        f.write(video_bytes)
+        video_pad = (video_sec_cnt * 512) - len(video_bytes)
+        if video_pad > 0:
+            f.write(b"\x00" * video_pad)
+
+        curr_pos = f.tell()
+        bytes_left = index_offset - curr_pos
+        chunk_size = 64 * 1024
+        while bytes_left > 0:
+            current_chunk = min(bytes_left, chunk_size)
+            data = rng.randbytes(current_chunk)
+            f.write(data)
+            bytes_left -= current_chunk
+
+        f.write(heim_const.HEIMVISION_INDEX_MAGIC)
+        records_data = [
+            (1, 1700000000, 1700003600, start_sec, video_sec_cnt, len(video_bytes)),
+            (2, 1700003600, 1700007200, start_sec, video_sec_cnt, len(video_bytes)),
+        ]
+        f.write(struct.pack("<H", len(records_data)))
+
+        index_table_bytes_written = len(heim_const.HEIMVISION_INDEX_MAGIC) + 2
+        for ch_id, start_ts, end_ts, s_sec, s_cnt, fsize in records_data:
+            rec_bytes = struct.pack(
+                heim_const.HEIMVISION_INDEX_RECORD_STRUCT,
+                ch_id, start_ts, end_ts, s_sec, s_cnt, fsize
+            )
+            f.write(rec_bytes)
+            index_table_bytes_written += len(rec_bytes)
+
+        remaining_tail = size_bytes - (index_offset + index_table_bytes_written)
+        if remaining_tail > 0:
+            f.write(rng.randbytes(remaining_tail))
+
+    return output_path
+
+
 if __name__ == "__main__":
     generate_dahua_image("dahua_demo.dd")
     generate_hikvision_image("hikvision_demo.dd")

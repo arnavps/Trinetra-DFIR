@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 from app.engine2_detector.signature_matcher import match_signature
 from app.engine3_parsers.dhfs_parser import DhfsParser
 from app.engine3_parsers.hikfat_parser import HikFatParser
+from app.engine3_parsers.heimvision_parser import HeimVisionParser
 from app.engine3_parsers.generic_parser import GenericParser
 from app.engine3_parsers.fs_base import VirtualFileSystem
 from app.engine5_playback.decoder import StreamDecoder
@@ -355,6 +356,9 @@ class MainWindow(QMainWindow):
             self.current_vfs = parser.parse(image_path)
         elif match_res.oem == "Dahua":
             parser = DhfsParser()
+            self.current_vfs = parser.parse(image_path)
+        elif match_res.oem == "HeimVision":
+            parser = HeimVisionParser()
             self.current_vfs = parser.parse(image_path)
         else:
             parser = GenericParser()

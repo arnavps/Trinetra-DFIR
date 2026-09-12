@@ -72,7 +72,7 @@ Modern CCTV recorders do not utilize standard operating systems or NTFS/FAT file
 
 - **Engine 1 (`app/engine1_acquisition`)**: Hardware write-blocker verification (`writeblock_check.py`), raw block-level chunked acquisition, and streaming MD5/SHA256 hash computation via `unidvr_rustcore` Rust PyO3 bindings.
 - **Engine 2 (`app/engine2_detector`)**: Deterministic OEM signature matcher (`signature_matcher.py`) scanning sector offsets against `signatures.json` with a Random Forest fallback sector classifier (`fallback_classifier.py`).
-- **Engine 3 (`app/engine3_parsers`)**: Proprietary filesystem parsers implementing `FileSystemParser` (`hikfat_parser.py`, `dhfs_parser.py`, `generic_parser.py`).
+- **Engine 3 (`app/engine3_parsers`)**: Proprietary filesystem parsers implementing `FileSystemParser` (`hikfat_parser.py`, `dhfs_parser.py`, `heimvision_parser.py`, `generic_parser.py`).
 - **Engine 4 (`app/engine4_carver`)**: Sector-level NAL unit scanner (`frame_carver.py`) and raw GOP reconstructor (`gop_reconstructor.py`) extracting elementary video streams without container repackaging.
 - **Engine 5 (`app/engine5_playback`)**: SmartCodec bitstream preprocessor (`bitstream_preprocessor.py`), OpenCV/PyO3 in-memory H.264/H.265 frame decoder (`decoder.py`), and container remuxer (`remuxer.py`).
 - **Engine 6 (`app/engine6_timeline`)**: On-Screen Display (OSD) timecode extractor (`osd_extractor.py`), classical CV ambient luminance change-point detector (`visual_anchor.py`), and unified per-channel clock normalizer (`normalizer.py`).

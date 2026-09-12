@@ -16,6 +16,14 @@
       "pattern_hex": "48494b564953494f4e",
       "description": "Hikvision HIKFAT superblock ASCII signature 'HIKVISION'",
       "confidence_note": "Deterministic primary signature hypothesis from literature"
+    },
+    {
+      "oem": "HeimVision",
+      "signature_id": "heimvision_hfs_v1",
+      "offset": 0,
+      "pattern_hex": "4845494d564953494f4e",
+      "description": "HeimVision HFS superblock ASCII signature 'HEIMVISION'",
+      "confidence_note": "Deterministic primary signature hypothesis from literature"
     }
   ]
 }

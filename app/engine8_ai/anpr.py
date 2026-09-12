@@ -135,12 +135,13 @@ def run_anpr_on_clip(
                     plate_id = str(uuid.uuid4())
                     bbox_json = json.dumps(plate["bbox"])
                     text_label = plate["plate_text"]
-                    if plate.get("is_simulated", False):
+                    is_sim = 1 if plate.get("is_simulated", False) else 0
+                    if is_sim:
                         text_label += " (SIMULATED)"
                     conn.execute(
                         """
-                        INSERT INTO plate_detections (plate_id, file_id, timestamp, frame_index, plate_text, confidence, bbox_json)
-                        VALUES (?, ?, ?, ?, ?, ?, ?);
+                        INSERT INTO plate_detections (plate_id, file_id, timestamp, frame_index, plate_text, confidence, bbox_json, is_simulated)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
                         """,
                         (
                             plate_id,
@@ -150,6 +151,7 @@ def run_anpr_on_clip(
                             text_label,
                             plate["confidence"],
                             bbox_json,
+                            is_sim,
                         ),
                     )
                     inserted_ids.append(plate_id)

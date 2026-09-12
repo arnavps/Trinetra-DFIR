@@ -103,10 +103,11 @@ def run_face_detection_on_clip(
                     face_id = str(uuid.uuid4())
                     bbox_json = json.dumps(face["bbox"])
                     landmarks_json = json.dumps(face.get("landmarks", []))
+                    is_sim = 1 if face.get("is_simulated", False) else 0
                     conn.execute(
                         """
-                        INSERT INTO face_detections (face_id, file_id, timestamp, frame_index, confidence, bbox_json, landmarks_json)
-                        VALUES (?, ?, ?, ?, ?, ?, ?);
+                        INSERT INTO face_detections (face_id, file_id, timestamp, frame_index, confidence, bbox_json, landmarks_json, is_simulated)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
                         """,
                         (
                             face_id,
@@ -116,6 +117,7 @@ def run_face_detection_on_clip(
                             face["confidence"],
                             bbox_json,
                             landmarks_json,
+                            is_sim,
                         ),
                     )
                     inserted_ids.append(face_id)

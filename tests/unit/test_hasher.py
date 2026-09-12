@@ -30,21 +30,21 @@ def test_hasher_matches_python_hashlib():
             assert total_bytes == 1 * 1024 * 1024
 
 
+from unittest import mock
+
 def test_acquisition_determinism():
     """Acquiring the same synthetic image twice produces identical hashes (determinism)."""
     with tempfile.TemporaryDirectory() as tmpdir:
         src_path = os.path.join(tmpdir, "source.dd")
         generate_dahua_image(src_path, size_bytes=2 * 1024 * 1024, seed=999)
 
-        # Make source read-only to pass write-block check
-        os.chmod(src_path, 0o444)
-
         db_path = os.path.join(tmpdir, "case.db")
         dst1 = os.path.join(tmpdir, "out1.dd")
         dst2 = os.path.join(tmpdir, "out2.dd")
 
-        res1 = acquire_image(src_path, dst1, case_id="CASE-001", db_path=db_path)
-        res2 = acquire_image(src_path, dst2, case_id="CASE-001", db_path=db_path)
+        with mock.patch("app.engine1_acquisition.acquirer.verify_read_only", return_value=True):
+            res1 = acquire_image(src_path, dst1, case_id="CASE-001", db_path=db_path)
+            res2 = acquire_image(src_path, dst2, case_id="CASE-001", db_path=db_path)
 
         assert res1.md5 == res2.md5
         assert res1.sha256 == res2.sha256
@@ -59,11 +59,31 @@ def test_writeblock_check_rejects_writable_handle():
         with open(writable_path, "wb") as f:
             f.write(b"data")
 
-        # Explicitly ensure writable permissions
-        os.chmod(writable_path, 0o666)
-
         with pytest.raises(WriteBlockViolationError):
             verify_read_only(writable_path)
+
+
+def test_writeblock_check_mock_read_only():
+    """writeblock_check.py deterministically passes when writable open raises PermissionError, regardless of OS root/Administrator status."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fake_path = os.path.join(tmpdir, "source.dd")
+        with open(fake_path, "wb") as f:
+            f.write(b"data")
+
+        orig_open = open
+        def mock_open(path, mode="r", *args, **kwargs):
+            if "r+b" in mode or "w" in mode or "+" in mode:
+                raise PermissionError("Simulated hardware write-block")
+            return orig_open(path, mode, *args, **kwargs)
+
+        def mock_os_open(path, flags, *args, **kwargs):
+            if flags & (os.O_RDWR | os.O_WRONLY):
+                raise PermissionError("Simulated hardware write-block")
+            return os.open(path, flags, *args, **kwargs)
+
+        with mock.patch("builtins.open", side_effect=mock_open), \
+             mock.patch("os.open", side_effect=mock_os_open):
+            assert verify_read_only(fake_path) is True
 
 
 def test_audit_log_hash_chaining_and_tampering():

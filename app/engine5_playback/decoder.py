@@ -1,4 +1,4 @@
-"""In-memory decode of the depacketized stream via FFmpeg libavcodec / libVLC / libmpv bindings. Feeds decoded frames directly to the UI's video_tile widget for playback and to engine8_ai for frame-level analysis. Writes no file to disk — this is the primary output of Engine 5 now, replacing remux as the default path."""
+"""Decodes the original, unconverted elementary stream. For decoding, the original bytes are written to an ephemeral OS temp file (never the case directory) solely because OpenCV cannot decode from an in-memory buffer directly; the temp file is deleted immediately after decode and at no point is a converted or re-encoded file produced."""
 
 import os
 import tempfile
@@ -13,8 +13,7 @@ os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8"
 
 class StreamDecoder:
     """
-    In-memory video frame decoder for H.264/H.265 elementary bitstreams.
-    Does NOT write any .mp4 or .mkv files to disk.
+    Decodes the original, unconverted elementary stream. For decoding, the original bytes are written to an ephemeral OS temp file (never the case directory) solely because OpenCV cannot decode from an in-memory buffer directly; the temp file is deleted immediately after decode and at no point is a converted or re-encoded file produced.
     """
 
     def __init__(self, stream_buffer: bytes, oem: str = "auto"):
@@ -22,9 +21,9 @@ class StreamDecoder:
         self.depacketized_buffer = depacketize_stream(stream_buffer, oem=oem)
         self._frames: List[np.ndarray] = []
         self._decoded = False
-        self._decode_in_memory()
+        self._decode_stream()
 
-    def _decode_in_memory(self) -> None:
+    def _decode_stream(self) -> None:
         if not self.depacketized_buffer:
             self._frames = []
             self._decoded = True

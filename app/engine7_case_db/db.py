@@ -60,6 +60,7 @@ def init_db(db_path: str) -> None:
                     class_name TEXT NOT NULL,
                     confidence REAL NOT NULL,
                     bbox_json TEXT NOT NULL,
+                    is_simulated INTEGER NOT NULL DEFAULT 1,
                     FOREIGN KEY(file_id) REFERENCES extracted_files(file_id)
                 );
             """)
@@ -72,6 +73,7 @@ def init_db(db_path: str) -> None:
                     confidence REAL NOT NULL,
                     bbox_json TEXT NOT NULL,
                     landmarks_json TEXT,
+                    is_simulated INTEGER NOT NULL DEFAULT 1,
                     FOREIGN KEY(file_id) REFERENCES extracted_files(file_id)
                 );
             """)
@@ -82,6 +84,7 @@ def init_db(db_path: str) -> None:
                     file_id TEXT NOT NULL,
                     embedding_json TEXT NOT NULL,
                     label TEXT NOT NULL,
+                    is_simulated INTEGER NOT NULL DEFAULT 1,
                     FOREIGN KEY(detection_id) REFERENCES detections(detection_id),
                     FOREIGN KEY(file_id) REFERENCES extracted_files(file_id)
                 );
@@ -95,6 +98,7 @@ def init_db(db_path: str) -> None:
                     plate_text TEXT NOT NULL,
                     confidence REAL NOT NULL,
                     bbox_json TEXT NOT NULL,
+                    is_simulated INTEGER NOT NULL DEFAULT 1,
                     FOREIGN KEY(file_id) REFERENCES extracted_files(file_id)
                 );
             """)
@@ -105,6 +109,7 @@ def init_db(db_path: str) -> None:
                     file_id TEXT NOT NULL,
                     embedding_json TEXT NOT NULL,
                     label TEXT NOT NULL,
+                    is_simulated INTEGER NOT NULL DEFAULT 1,
                     FOREIGN KEY(detection_id) REFERENCES detections(detection_id),
                     FOREIGN KEY(file_id) REFERENCES extracted_files(file_id)
                 );

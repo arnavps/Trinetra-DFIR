@@ -137,10 +137,11 @@ def run_detection_on_clip(
                 for det in dets:
                     det_id = str(uuid.uuid4())
                     bbox_json = json.dumps(det["bbox"])
+                    is_sim = 1 if det.get("is_simulated", False) else 0
                     conn.execute(
                         """
-                        INSERT INTO detections (detection_id, file_id, timestamp, frame_index, class_name, confidence, bbox_json)
-                        VALUES (?, ?, ?, ?, ?, ?, ?);
+                        INSERT INTO detections (detection_id, file_id, timestamp, frame_index, class_name, confidence, bbox_json, is_simulated)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?);
                         """,
                         (
                             det_id,
@@ -150,6 +151,7 @@ def run_detection_on_clip(
                             det["class_name"],
                             det["confidence"],
                             bbox_json,
+                            is_sim,
                         ),
                     )
                     inserted_ids.append(det_id)

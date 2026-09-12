@@ -52,6 +52,7 @@ class Detection:
     class_name: str
     confidence: float
     bbox_json: str  # "[x1, y1, x2, y2]"
+    is_simulated: int = 1
 
 
 @dataclass
@@ -63,6 +64,7 @@ class FaceDetection:
     confidence: float
     bbox_json: str  # "[x1, y1, x2, y2]"
     landmarks_json: Optional[str] = None
+    is_simulated: int = 1
 
 
 @dataclass
@@ -72,6 +74,7 @@ class PersonReIDEmbedding:
     file_id: str
     embedding_json: str
     label: str = INVESTIGATIVE_LEAD_LABEL
+    is_simulated: int = 1
 
 
 @dataclass
@@ -83,6 +86,7 @@ class PlateDetection:
     plate_text: str
     confidence: float
     bbox_json: str  # "[x1, y1, x2, y2]"
+    is_simulated: int = 1
 
 
 @dataclass
@@ -92,5 +96,6 @@ class VehicleReIDEmbedding:
     file_id: str
     embedding_json: str
     label: str = INVESTIGATIVE_LEAD_LABEL
+    is_simulated: int = 1
 
 

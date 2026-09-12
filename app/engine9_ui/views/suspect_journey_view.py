@@ -31,7 +31,7 @@ def cross_reference_reid(
         cur = conn.cursor()
 
         query_sql = """
-            SELECT r.reid_id, r.detection_id, r.file_id, r.embedding_json, r.label,
+            SELECT r.reid_id, r.detection_id, r.file_id, r.embedding_json, r.label, r.is_simulated,
                    f.channel_id, d.timestamp, d.class_name
             FROM person_reid_embeddings r
             JOIN extracted_files f ON r.file_id = f.file_id
@@ -41,7 +41,7 @@ def cross_reference_reid(
         person_rows = cur.fetchall()
 
         query_v_sql = """
-            SELECT r.reid_id, r.detection_id, r.file_id, r.embedding_json, r.label,
+            SELECT r.reid_id, r.detection_id, r.file_id, r.embedding_json, r.label, r.is_simulated,
                    f.channel_id, d.timestamp, d.class_name
             FROM vehicle_reid_embeddings r
             JOIN extracted_files f ON r.file_id = f.file_id
@@ -66,7 +66,8 @@ def cross_reference_reid(
                 sim = float(np.dot(s_norm, t_norm))
                 if sim >= threshold:
                     lbl = s["label"]
-                    if "(SIMULATED)" not in lbl:
+                    is_sim = s["is_simulated"] or t["is_simulated"]
+                    if is_sim and "(SIMULATED)" not in lbl:
                         lbl += " (SIMULATED)"
                     matches.append({
                         "source_channel": source_channel,

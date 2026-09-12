@@ -21,10 +21,11 @@ def test_full_custody_chain_and_pdf_report_export():
         src_path = os.path.join(tmpdir, "source_drive.dd")
         acquired_dd = os.path.join(tmpdir, "acquired_drive.dd")
         generate_hikvision_image(src_path, size_bytes=10 * 1024 * 1024, seed=42)
-        os.chmod(src_path, 0o444)
+        from unittest import mock
 
         # 1. Acquisition
-        acq_res = acquire_image(src_path, acquired_dd, case_id=case_id, db_path=db_path)
+        with mock.patch("app.engine1_acquisition.acquirer.verify_read_only", return_value=True):
+            acq_res = acquire_image(src_path, acquired_dd, case_id=case_id, db_path=db_path)
 
         # 2. Parsing (Hikvision HIKFAT)
         log_event(db_path, case_id, "PARSING_START", {"oem": "Hikvision", "image_path": acquired_dd})

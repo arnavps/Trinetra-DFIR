@@ -110,6 +110,7 @@ def run_reid_on_detections(
                 emb, _is_sim = reid_engine.extract_embedding(crop)
                 reid_id = str(uuid.uuid4())
                 emb_json = json.dumps(emb)
+                is_sim = 1 if (_is_sim or reid_engine.is_simulated) else 0
 
                 label_text = reid_engine.label
                 if reid_engine.is_simulated:
@@ -117,8 +118,8 @@ def run_reid_on_detections(
 
                 conn.execute(
                     """
-                    INSERT INTO person_reid_embeddings (reid_id, detection_id, file_id, embedding_json, label)
-                    VALUES (?, ?, ?, ?, ?);
+                    INSERT INTO person_reid_embeddings (reid_id, detection_id, file_id, embedding_json, label, is_simulated)
+                    VALUES (?, ?, ?, ?, ?, ?);
                     """,
                     (
                         reid_id,
@@ -126,6 +127,7 @@ def run_reid_on_detections(
                         file_id,
                         emb_json,
                         label_text,
+                        is_sim,
                     ),
                 )
                 inserted_ids.append(reid_id)

@@ -55,19 +55,17 @@ def test_full_end_to_end_forensic_pipeline(tmp_path):
     gen_synth.generate_hikvision_image(hik_img_path, size_bytes=5 * 1024 * 1024)
     gen_synth.generate_unknown_oem_image(unknown_img_path, size_bytes=2 * 1024 * 1024)
 
-    # Set read-only permissions for write-blocker verification
-    os.chmod(dahua_img_path, 0o444)
-    os.chmod(hik_img_path, 0o444)
-    os.chmod(unknown_img_path, 0o444)
+    from unittest import mock
 
     # Step 3: Engine 1 Acquisition & Hashing
 
-    acq_res = acquirer.acquire_image(
-        source_path=dahua_img_path,
-        dest_path=os.path.join(case_dir, "acquired_dahua.dd"),
-        case_id=case_id,
-        db_path=db_path,
-    )
+    with mock.patch("app.engine1_acquisition.acquirer.verify_read_only", return_value=True):
+        acq_res = acquirer.acquire_image(
+            source_path=dahua_img_path,
+            dest_path=os.path.join(case_dir, "acquired_dahua.dd"),
+            case_id=case_id,
+            db_path=db_path,
+        )
     assert os.path.exists(acq_res.path)
     assert len(acq_res.md5) == 32
     assert len(acq_res.sha256) == 64

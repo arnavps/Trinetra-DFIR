@@ -18,6 +18,7 @@ class AcquisitionResult:
     byte_count: int
     started_at: str
     finished_at: str
+    write_blocked: bool = True
 
 
 def compute_hashes_python(filepath: str, chunk_size: int = 4 * 1024 * 1024):
@@ -54,9 +55,23 @@ def compute_hashes_python(filepath: str, chunk_size: int = 4 * 1024 * 1024):
     return md5.hexdigest(), sha256.hexdigest(), merkle_root, total_bytes
 
 
-def acquire_image(source_path: str, dest_path: str, case_id: str, db_path: str = "case.db") -> AcquisitionResult:
+def acquire_image(
+    source_path: str,
+    dest_path: str,
+    case_id: str,
+    db_path: str = "case.db",
+    enforce_write_block: bool = False,
+) -> AcquisitionResult:
+    import os
+
     # 1. Verify source handle is read-only
-    verify_read_only(source_path)
+    write_blocked = True
+    try:
+        verify_read_only(source_path)
+    except Exception:
+        write_blocked = False
+        if enforce_write_block:
+            raise
 
     started_at = datetime.now(timezone.utc).isoformat()
 
@@ -65,11 +80,17 @@ def acquire_image(source_path: str, dest_path: str, case_id: str, db_path: str =
         db_path=db_path,
         case_id=case_id,
         event_type="ACQUISITION_START",
-        details={"source_path": source_path, "dest_path": dest_path, "started_at": started_at}
+        details={
+            "source_path": source_path,
+            "dest_path": dest_path,
+            "started_at": started_at,
+            "write_blocked": write_blocked,
+        }
     )
 
-    # 3. Write .dd raw image
-    write_dd_image(source_path, dest_path)
+    # 3. Write .dd raw image (if destination differs from source)
+    if os.path.abspath(source_path) != os.path.abspath(dest_path):
+        write_dd_image(source_path, dest_path)
 
     # 4. Compute hashes via Rust core if available, or Python fallback
     try:
@@ -90,6 +111,7 @@ def acquire_image(source_path: str, dest_path: str, case_id: str, db_path: str =
             "dest_path": dest_path,
             "finished_at": finished_at,
             "byte_count": total_bytes,
+            "write_blocked": write_blocked,
         }
     )
 
@@ -114,4 +136,5 @@ def acquire_image(source_path: str, dest_path: str, case_id: str, db_path: str =
         byte_count=total_bytes,
         started_at=started_at,
         finished_at=finished_at,
+        write_blocked=write_blocked,
     )

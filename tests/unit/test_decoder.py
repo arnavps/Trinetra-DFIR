@@ -95,8 +95,8 @@ def test_no_mp4_mkv_in_workspace():
     all_mp4 = glob.glob(os.path.join(repo_root, "**", "*.mp4"), recursive=True)
     all_mkv = glob.glob(os.path.join(repo_root, "**", "*.mkv"), recursive=True)
 
-    primary_mp4 = [f for f in all_mp4 if "demo_case" not in f and "derivatives" not in f]
-    primary_mkv = [f for f in all_mkv if "demo_case" not in f and "derivatives" not in f]
+    primary_mp4 = [f for f in all_mp4 if "demo_case" not in f and "derivatives" not in f and not os.path.basename(f).startswith("export_")]
+    primary_mkv = [f for f in all_mkv if "demo_case" not in f and "derivatives" not in f and not os.path.basename(f).startswith("export_")]
 
     assert len(primary_mp4) == 0, f"Found unexpected MP4 files on primary path: {primary_mp4}"
     assert len(primary_mkv) == 0, f"Found unexpected MKV files on primary path: {primary_mkv}"

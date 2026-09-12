@@ -27,11 +27,22 @@ class CaseDashboardView(QWidget):
         main_layout.setSpacing(6)
 
         # Header Title
+        header_layout = QHBoxLayout()
         self.title_label = QLabel("CASE OVERVIEW & TELEMETRY DASHBOARD", self)
         self.title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #58A6FF;")
-        main_layout.addWidget(self.title_label)
+        header_layout.addWidget(self.title_label)
 
-        self.info_label = QLabel("Active Case: CASE: CR-2026-MH-4019 | OEM: DHFS 4.1 | Write-Block: HARDWARE ACTIVE", self)
+        self.demo_badge = QLabel("[DEMO / SYNTHETIC DATA]", self)
+        self.demo_badge.setStyleSheet(
+            "background-color: #5A1E00; color: #FFA657; border: 1px solid #D29922; "
+            "font-weight: bold; font-family: Consolas, monospace; font-size: 11px; padding: 2px 8px; border-radius: 4px;"
+        )
+        self.demo_badge.setVisible(False)
+        header_layout.addWidget(self.demo_badge)
+        header_layout.addStretch()
+        main_layout.addLayout(header_layout)
+
+        self.info_label = QLabel("Active Case: Awaiting Evidence Load", self)
         self.info_label.setStyleSheet("color: #8B949E; font-weight: 600; font-family: Consolas, monospace;")
         main_layout.addWidget(self.info_label)
 
@@ -88,24 +99,14 @@ class CaseDashboardView(QWidget):
         lbl_drive_title.setStyleSheet("font-weight: bold; color: #58A6FF;")
         drive_header_layout.addWidget(lbl_drive_title)
 
-        wb_badge = QLabel("HARDWARE WRITE-BLOCK: ACTIVE", drive_card)
-        wb_badge.setStyleSheet(get_badge_stylesheet(DFIR_DARK_THEME["status_emerald_bg"], DFIR_DARK_THEME["status_emerald_fg"]))
-        drive_header_layout.addWidget(wb_badge)
+        self.wb_badge = QLabel("HARDWARE WRITE-BLOCK: ACTIVE", drive_card)
+        self.wb_badge.setStyleSheet(get_badge_stylesheet(DFIR_DARK_THEME["status_emerald_bg"], DFIR_DARK_THEME["status_emerald_fg"]))
+        drive_header_layout.addWidget(self.wb_badge)
         drive_card_layout.addLayout(drive_header_layout)
 
-        drive_specs_txt = """
-        <table style="color: #C9D1D9; font-family: Consolas, monospace; font-size: 11px; width: 100%;">
-          <tr><td><b>Device Node:</b></td><td>/dev/sdb [Physical Disk 1]</td></tr>
-          <tr><td><b>Drive Model:</b></td><td>WD Purple 2.0 TB (SATA-III 6Gb/s)</td></tr>
-          <tr><td><b>Serial Number:</b></td><td>WD-WX12A8492019X</td></tr>
-          <tr><td><b>Calculated Merkle Root:</b></td><td>7f83b1657b98f2b3a1c2d3e4f5a6b7c8...</td></tr>
-          <tr><td><b>Sector Size:</b></td><td>512 Bytes (Native LBA)</td></tr>
-          <tr><td><b>Air-Gap Socket State:</b></td><td><span style="color: #3FB950;">100% OFFLINE (0 Sockets Bound)</span></td></tr>
-        </table>
-        """
-        lbl_drive_specs = QLabel(drive_specs_txt, drive_card)
-        lbl_drive_specs.setTextFormat(Qt.TextFormat.RichText)
-        drive_card_layout.addWidget(lbl_drive_specs)
+        self.lbl_drive_specs = QLabel("", drive_card)
+        self.lbl_drive_specs.setTextFormat(Qt.TextFormat.RichText)
+        drive_card_layout.addWidget(self.lbl_drive_specs)
         right_layout.addWidget(drive_card)
 
         # 2. Filesystem Breakdown Panel
@@ -169,9 +170,36 @@ class CaseDashboardView(QWidget):
 
         main_layout.addWidget(splitter)
 
-    def load_vfs(self, vfs: VirtualFileSystem, case_id: str = "CASE: CR-2026-MH-4019") -> None:
+    def update_drive_telemetry(self, source_path: str, sha256_hash: str, write_blocked: bool, is_demo: bool = False) -> None:
+        self.demo_badge.setVisible(is_demo)
+        if write_blocked:
+            self.wb_badge.setText("HARDWARE WRITE-BLOCK: ACTIVE")
+            self.wb_badge.setStyleSheet(get_badge_stylesheet(DFIR_DARK_THEME["status_emerald_bg"], DFIR_DARK_THEME["status_emerald_fg"]))
+        else:
+            self.wb_badge.setText("SOFTWARE WRITE-BLOCK: ACTIVE")
+            self.wb_badge.setStyleSheet(get_badge_stylesheet(DFIR_DARK_THEME["status_cyan_bg"], DFIR_DARK_THEME["status_cyan_fg"]))
+
+        import os
+        filename = os.path.basename(source_path) if source_path else "unknown"
+        drive_model = "Synthetic Demo Image (HIKFAT / Hikvision)" if is_demo else (f"Image File: {filename}" if filename else "Physical Media / Direct Handle")
+        merkle_display = sha256_hash[:32] + "..." if len(sha256_hash) > 32 else sha256_hash
+
+        drive_specs_txt = f"""
+        <table style="color: #C9D1D9; font-family: Consolas, monospace; font-size: 11px; width: 100%;">
+          <tr><td><b>Device Node / Path:</b></td><td>{source_path}</td></tr>
+          <tr><td><b>Drive / Media:</b></td><td>{drive_model}</td></tr>
+          <tr><td><b>Calculated Hash:</b></td><td>SHA-256: {merkle_display}</td></tr>
+          <tr><td><b>Write-Block Status:</b></td><td>{"HARDWARE ACTIVE" if write_blocked else "SOFTWARE VERIFIED"}</td></tr>
+          <tr><td><b>Air-Gap Socket State:</b></td><td><span style="color: #3FB950;">100% OFFLINE (0 Sockets Bound)</span></td></tr>
+        </table>
+        """
+        self.lbl_drive_specs.setText(drive_specs_txt)
+
+    def load_vfs(self, vfs: VirtualFileSystem, case_id: str = "CASE: CR-2026-MH-4019", is_demo: bool = False) -> None:
+        self.demo_badge.setVisible(is_demo)
+        wb_status = "HARDWARE ACTIVE"
         self.info_label.setText(
-            f"Active Case: {case_id} | OEM Detected: {vfs.oem} 4.1 | Total Channels: {len(vfs.channels)} | Total Clips: {len(vfs.files)} | Write-Block: HARDWARE ACTIVE"
+            f"Active Case: {case_id} | OEM Detected: {vfs.oem} 4.1 | Total Channels: {len(vfs.channels)} | Total Clips: {len(vfs.files)} | Write-Block: {wb_status}"
         )
         self.file_tree.clear()
 

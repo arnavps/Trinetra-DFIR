@@ -60,12 +60,22 @@ class ForensicStatusRibbonWidget(QFrame):
         ))
         layout.addWidget(self.badge_airgap)
 
-    def update_telemetry(self, source: str, oem: str, write_blocked: bool, image_hash: str) -> None:
+        # 6. Demo / Synthetic Data Badge (Shown ONLY for demo cases)
+        self.badge_demo = QLabel("[DEMO / SYNTHETIC DATA]", self)
+        self.badge_demo.setStyleSheet(
+            "background-color: #5A1E00; color: #FFA657; border: 1px solid #D29922; "
+            "font-weight: bold; font-family: Consolas, monospace; font-size: 11px; padding: 2px 8px; border-radius: 4px;"
+        )
+        self.badge_demo.setVisible(False)
+        layout.addWidget(self.badge_demo)
+
+    def update_telemetry(self, source: str, oem: str, write_blocked: bool, image_hash: str, is_demo: bool = False) -> None:
         """Updates ribbon values dynamically based on active loaded case."""
         self.lbl_source.setText(f"<b>Source:</b> {source}")
         self.lbl_fs.setText(f"<b>FS:</b> {oem}")
         hash_short = image_hash[:16] + "..." + image_hash[-6:] if len(image_hash) > 22 else image_hash
         self.lbl_hash.setText(f"<b>Merkle Hash:</b> SHA-256: {hash_short} [VERIFIED]")
+        self.badge_demo.setVisible(is_demo)
 
         if write_blocked:
             self.badge_writeblock.setText("[HARDWARE WRITE-BLOCKED: ACTIVE]")

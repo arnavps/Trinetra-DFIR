@@ -34,7 +34,7 @@ def query_annotations(
 
         sql = """
             SELECT d.detection_id, d.file_id, d.timestamp, d.frame_index, d.class_name,
-                   d.confidence, d.bbox_json, f.channel_id, r.label as reid_label
+                   d.confidence, d.bbox_json, d.is_simulated, f.channel_id, r.label as reid_label
             FROM detections d
             JOIN extracted_files f ON d.file_id = f.file_id
             LEFT JOIN person_reid_embeddings r ON d.detection_id = r.detection_id
@@ -77,13 +77,13 @@ def query_annotations(
                     "confidence": float(row["confidence"]),
                     "bbox_json": row["bbox_json"],
                     "reid_label": reid_note,
-                    "is_simulated": "(SIMULATED)" in reid_note or True,  # Flagged simulated by default unless live ONNX verified
+                    "is_simulated": bool(row["is_simulated"]),
                 })
 
         if not class_filter or class_filter.lower() in ("all", "face"):
             face_sql = """
                 SELECT fd.face_id, fd.file_id, fd.timestamp, fd.frame_index,
-                       fd.confidence, fd.bbox_json, f.channel_id
+                       fd.confidence, fd.bbox_json, fd.is_simulated, f.channel_id
                 FROM face_detections fd
                 JOIN extracted_files f ON fd.file_id = f.file_id
                 WHERE 1=1
@@ -116,7 +116,7 @@ def query_annotations(
                     "confidence": float(row["confidence"]),
                     "bbox_json": row["bbox_json"],
                     "reid_label": "",
-                    "is_simulated": True,
+                    "is_simulated": bool(row["is_simulated"]),
                 })
     finally:
         conn.close()
@@ -292,5 +292,10 @@ class SearchPanelWidget(QWidget):
             self.table.setItem(row_idx, 5, QTableWidgetItem(str(item["bbox_json"])))
             self.table.setItem(row_idx, 6, QTableWidgetItem(str(item["file_id"])))
 
-            reid_text = item["reid_label"] if item["reid_label"] else (INVESTIGATIVE_LEAD_LABEL + " (SIMULATED)")
+            if item["reid_label"]:
+                reid_text = item["reid_label"]
+            elif item.get("is_simulated", True):
+                reid_text = f"{INVESTIGATIVE_LEAD_LABEL} (SIMULATED)"
+            else:
+                reid_text = INVESTIGATIVE_LEAD_LABEL
             self.table.setItem(row_idx, 7, QTableWidgetItem(reid_text))

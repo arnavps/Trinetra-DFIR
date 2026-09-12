@@ -1,4 +1,4 @@
-"""Unified ImageReader abstraction — seamlessly reads raw (.dd, .raw) and split EWF (.E01, .E02, .E03...) segment images.
+"""Unified ImageReader abstraction — seamlessly reads raw (.dd, .raw) and split EWF (.E01, .E02, .E03, .eo3...) segment images.
 
 Provides standard Python file-like interface (read, seek, tell) across single or split forensic evidence segment files.
 """
@@ -12,36 +12,63 @@ from typing import List, Optional
 EWF_MAGIC_HEADER = b"\x45\x56\x46\x0d\x0a\x81\x00"
 
 
-def find_split_segments(first_segment_path: str) -> List[str]:
+def parse_segment_ext(path: str) -> Optional[int]:
     """
-    Given a path to an E01 file (e.g., 'case_drive.E01'), discovers all matching split segment files
-    in sequential order (e.g., '.E01', '.E02', '.E03', ... '.E99', '.EAA', '.EAB').
+    Returns sequential index of an EWF/split extension (.e01->1, .e02->2, .eo3->3, .e03->3, .eaa->100).
+    Normalizes common typos like '.eo3' (letter O instead of number 0).
     """
-    if not os.path.exists(first_segment_path):
+    ext = os.path.splitext(path)[1].lower()
+    m = re.match(r"^\.[eE]([0-9a-zA-Z]{2})$", ext)
+    if not m:
+        return None
+
+    code = m.group(1).lower().replace("o", "0")
+    if code.isdigit():
+        return int(code)
+
+    if len(code) == 2 and code.isalpha():
+        return 100 + (ord(code[0]) - ord("a")) * 26 + (ord(code[1]) - ord("a"))
+
+    return None
+
+
+def find_split_segments(input_path: str) -> List[str]:
+    """
+    Given a path to any EWF segment file (e.g., 'case.E01', 'case.e03', or 'case.eo3'),
+    discovers all matching split segment files in the directory and returns them
+    in true sequential order starting from chunk 1 (.E01 / .eo1).
+    """
+    if not os.path.exists(input_path):
         return []
 
-    base_dir = os.path.dirname(os.path.abspath(first_segment_path))
-    file_name = os.path.basename(first_segment_path)
-    prefix_match = re.match(r"^(.*?)\.e\d{2}$", file_name, re.IGNORECASE)
+    base_dir = os.path.dirname(os.path.abspath(input_path))
+    file_name = os.path.basename(input_path)
 
-    if not prefix_match:
-        return [first_segment_path]
+    seg_idx = parse_segment_ext(file_name)
+    if seg_idx is None:
+        return [input_path]
 
-    stem = prefix_match.group(1)
-    pattern = os.path.join(base_dir, f"{stem}.[eE][0-9a-zA-Z][0-9a-zA-Z]")
-    matches = glob.glob(pattern)
+    stem = os.path.splitext(file_name)[0]
+    pattern = os.path.join(base_dir, f"{stem}.*")
+    candidates = glob.glob(pattern)
 
-    def segment_key(path_str: str) -> str:
-        ext = os.path.splitext(path_str)[1].upper()
-        return ext
+    valid_segments = []
+    for p in candidates:
+        idx = parse_segment_ext(p)
+        if idx is not None:
+            valid_segments.append((idx, p))
 
-    return sorted(matches, key=segment_key)
+    if not valid_segments:
+        return [input_path]
+
+    valid_segments.sort(key=lambda item: item[0])
+    return [p for _, p in valid_segments]
 
 
 class ImageReader:
     """
     Unified file-like reader providing read, seek, tell across single (.dd, .raw)
-    or split EWF (.E01, .E02, .E03) evidence segment files.
+    or split EWF (.E01, .E02, .E03, .eo3) evidence segment files.
     """
 
     def __init__(self, first_segment_path: str):
@@ -61,13 +88,13 @@ class ImageReader:
 
         self.current_offset = 0
         self._is_ewf = False
-        self._header_offset = 0
 
-        # Check EWF Header Magic in first segment
-        with open(first_segment_path, "rb") as f:
-            header_bytes = f.read(len(EWF_MAGIC_HEADER))
-            if header_bytes == EWF_MAGIC_HEADER:
-                self._is_ewf = True
+        # Check EWF Header Magic in the primary segment (chunk 1)
+        if self.segments:
+            with open(self.segments[0], "rb") as f:
+                header_bytes = f.read(len(EWF_MAGIC_HEADER))
+                if header_bytes == EWF_MAGIC_HEADER:
+                    self._is_ewf = True
 
     @property
     def is_ewf(self) -> bool:
@@ -107,7 +134,6 @@ class ImageReader:
         buffer = bytearray()
         target_offset = self.current_offset
 
-        # Map target_offset into specific segment file
         seg_idx = 0
         accum_size = 0
         while seg_idx < len(self.segment_sizes) and accum_size + self.segment_sizes[seg_idx] <= target_offset:

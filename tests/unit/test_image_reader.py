@@ -67,3 +67,29 @@ def test_image_reader_multi_segment_e01_e02_e03(tmp_path):
         reader.seek(len(payload1))
         seg2_read = reader.read(len(payload2))
         assert seg2_read == payload2
+
+
+def test_image_reader_opening_e03_or_eo3_directly(tmp_path):
+    e01_path = os.path.join(tmp_path, "heim_drive.eo1")
+    e02_path = os.path.join(tmp_path, "heim_drive.eo2")
+    eo3_path = os.path.join(tmp_path, "heim_drive.eo3")
+
+    payload1 = EWF_MAGIC_HEADER + b"HEIMVISION_SUPERBLOCK_SECTOR_0"
+    payload2 = b"HEIMVISION_DATA_SECTOR_CHUNK2"
+    payload3 = b"HEIMVISION_INDEX_TABLE_SECTOR_TAIL"
+
+    with open(e01_path, "wb") as f:
+        f.write(payload1)
+    with open(e02_path, "wb") as f:
+        f.write(payload2)
+    with open(eo3_path, "wb") as f:
+        f.write(payload3)
+
+    # Opening chunk 3 (.eo3) directly MUST locate chunk 1 (.eo1) and start at sector 0
+    with ImageReader(eo3_path) as reader:
+        assert reader.is_ewf
+        assert reader.segment_count == 3
+        header_data = reader.read(len(EWF_MAGIC_HEADER))
+        assert header_data == EWF_MAGIC_HEADER
+        assert b"HEIMVISION_SUPERBLOCK" in reader.read(100)
+

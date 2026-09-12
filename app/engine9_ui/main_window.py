@@ -234,7 +234,10 @@ class MainWindow(QMainWindow):
 
     def _open_image(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Open DVR Image", "", "Raw DD Images (*.dd *.raw *.E01);;All Files (*)"
+            self,
+            "Open DVR Image",
+            "",
+            "All Forensic Images (*.dd *.raw *.E01 *.E02 *.E03 *.e01 *.e02 *.e03 *.eo1 *.eo2 *.eo3 *.E* *.e*);;Raw DD Images (*.dd *.raw);;EWF Segment Images (*.E01 *.E02 *.E03 *.e01 *.e02 *.e03 *.eo1 *.eo2 *.eo3);;All Files (*)"
         )
         if file_path:
             self.load_image(file_path)

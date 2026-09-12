@@ -1,15 +1,28 @@
-"""NAL-unit heuristic recovery from unallocated/corrupted sectors, using rust_core.nal_scanner."""
+"""
+NAL-unit heuristic recovery from unallocated/corrupted sectors.
+Attempts Rust hot path (unidvr_rustcore.find_nal_start_codes) first with Python bytes.find() fallback.
+"""
 
 import os
 from typing import List, Tuple, Union
 
+try:
+    import unidvr_rustcore
+except ImportError:
+    unidvr_rustcore = None
 
 NAL_START_CODE_4 = b"\x00\x00\x00\x01"
 NAL_START_CODE_3 = b"\x00\x00\x01"
 
 
 def find_nal_start_codes(data: bytes, max_units: int = 2000) -> List[int]:
-    """Scans binary data for 3-byte and 4-byte NAL unit start codes using C-accelerated bytes.find()."""
+    """Scans binary data for 3-byte and 4-byte NAL unit start codes using Rust extension or bytes.find() fallback."""
+    if unidvr_rustcore is not None and hasattr(unidvr_rustcore, "find_nal_start_codes"):
+        try:
+            return unidvr_rustcore.find_nal_start_codes(data, max_units)
+        except Exception:
+            pass
+
     offsets = []
     pos = 0
     data_len = len(data)

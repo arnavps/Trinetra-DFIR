@@ -11,5 +11,6 @@ use pyo3::prelude::*;
 fn unidvr_rustcore(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(bindings::hash_file, m)?)?;
     m.add_function(wrap_pyfunction!(bindings::verify_read_only, m)?)?;
+    m.add_function(wrap_pyfunction!(bindings::find_nal_start_codes, m)?)?;
     Ok(())
 }

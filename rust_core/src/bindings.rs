@@ -4,6 +4,7 @@ use pyo3::exceptions::PyIOError;
 use pyo3::prelude::*;
 use crate::hasher::hash_reader;
 use crate::raw_io::RawReader;
+use crate::nal_scanner::scan_nal_start_codes;
 
 #[pyfunction]
 pub fn hash_file(path: &str, chunk_size: Option<usize>) -> PyResult<(String, String, String, u64)> {
@@ -24,4 +25,10 @@ pub fn verify_read_only(path: &str) -> PyResult<bool> {
         return Ok(false);
     }
     Ok(true)
+}
+
+#[pyfunction]
+pub fn find_nal_start_codes(data: &[u8], max_units: Option<usize>) -> PyResult<Vec<usize>> {
+    let limit = max_units.unwrap_or(2000);
+    Ok(scan_nal_start_codes(data, limit))
 }

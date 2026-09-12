@@ -1,9 +1,11 @@
 """
 YOLOv8n object/person/vehicle detection via ONNX Runtime.
 Annotates detections into engine7_case_db annotation tables only (read-only advisory lane).
+Every result explicitly indicates whether it is real (from verified ONNX model) or simulated.
 """
 
 import json
+import logging
 import os
 import sqlite3
 import uuid
@@ -12,6 +14,7 @@ import numpy as np
 
 from app.engine8_ai import model_registry
 
+logger = logging.getLogger(__name__)
 
 COCO_CLASSES = [
     "person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck", "boat",
@@ -32,32 +35,35 @@ class YOLOv8Detector:
     def __init__(self, model_name: str = "yolov8n.onnx", custom_path: Optional[str] = None):
         self.model_name = model_name
         self.session = None
+        self.is_simulated = True
         try:
             self.session = model_registry.load_onnx_session(model_name, custom_path=custom_path)
-        except Exception:
-            # Session remains None if weights file not present or unverified
-            pass
+            self.is_simulated = False
+        except Exception as e:
+            logger.warning(f"SIMULATION FALLBACK: Model '{model_name}' could not be loaded ({e}). Detections will be marked is_simulated=True.")
+            self.is_simulated = True
 
     def detect_frame(
         self, frame: np.ndarray, conf_threshold: float = 0.25
     ) -> List[Dict[str, Any]]:
         """
         Runs object detection on a single frame (RGB or BGR numpy array HxWxC).
-        Returns a list of detection dicts: [{'class_name': str, 'confidence': float, 'bbox': [x1, y1, x2, y2]}]
+        Returns a list of detection dicts: [{'class_name': str, 'confidence': float, 'bbox': [x1, y1, x2, y2], 'is_simulated': bool}]
         """
         if self.session is None:
-            # Fallback mock detector for synthetic/test frames when model weights are not loaded
-            h, w = frame.shape[:2]
+            h, w = frame.shape[:2] if frame is not None and frame.ndim >= 2 else (360, 640)
             return [
                 {
                     "class_name": "person",
                     "confidence": 0.88,
                     "bbox": [int(w * 0.1), int(h * 0.1), int(w * 0.4), int(h * 0.8)],
+                    "is_simulated": True,
                 },
                 {
                     "class_name": "car",
                     "confidence": 0.92,
                     "bbox": [int(w * 0.5), int(h * 0.3), int(w * 0.9), int(h * 0.7)],
+                    "is_simulated": True,
                 },
             ]
 
@@ -91,14 +97,15 @@ class YOLOv8Detector:
             y1 = int((yc - bh / 2.0) * (h / 640.0))
             x2 = int((xc + bw / 2.0) * (w / 640.0))
             y2 = int((yc + bh / 2.0) * (h / 640.0))
-            
+
             cls_id = int(filtered_class_ids[i])
             cls_name = COCO_CLASSES[cls_id] if cls_id < len(COCO_CLASSES) else f"class_{cls_id}"
-            
+
             results.append({
                 "class_name": cls_name,
                 "confidence": float(filtered_conf[i]),
                 "bbox": [max(0, x1), max(0, y1), min(w, x2), min(h, y2)],
+                "is_simulated": False,
             })
         return results
 
@@ -126,7 +133,7 @@ def run_detection_on_clip(
             for frame_idx, frame in enumerate(frames):
                 ts = timestamps[frame_idx] if timestamps and frame_idx < len(timestamps) else f"00:00:{frame_idx:02d}"
                 dets = detector.detect_frame(frame)
-                
+
                 for det in dets:
                     det_id = str(uuid.uuid4())
                     bbox_json = json.dumps(det["bbox"])

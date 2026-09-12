@@ -5,14 +5,17 @@ Any UI or report surface showing a Re-ID result MUST label it as an investigativ
 """
 
 import json
+import logging
 import os
 import sqlite3
 import uuid
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 
 from app.engine8_ai import model_registry
 from app.engine7_case_db.models import INVESTIGATIVE_LEAD_LABEL
+
+logger = logging.getLogger(__name__)
 
 
 class VehicleReID:
@@ -20,25 +23,27 @@ class VehicleReID:
         self.model_name = model_name
         self.label = INVESTIGATIVE_LEAD_LABEL
         self.session = None
+        self.is_simulated = True
         try:
             self.session = model_registry.load_onnx_session(model_name, custom_path=custom_path)
-        except Exception:
-            pass
+            self.is_simulated = False
+        except Exception as e:
+            logger.warning(f"SIMULATION FALLBACK: Model '{model_name}' could not be loaded ({e}). Vehicle Re-ID embeddings will be marked is_simulated=True.")
+            self.is_simulated = True
 
-    def extract_embedding(self, crop: np.ndarray) -> List[float]:
+    def extract_embedding(self, crop: np.ndarray) -> Tuple[List[float], bool]:
         """
         Extracts a normalized 256-d feature vector embedding for a vehicle crop image.
+        Returns tuple: (embedding_list, is_simulated)
         """
         if self.session is None:
-            # Deterministic pseudo-embedding for testing/fallback
             seed_val = int(np.sum(crop)) % 10000 if crop is not None and crop.size > 0 else 123
             rng = np.random.RandomState(seed_val)
             vec = rng.randn(256).astype(np.float32)
             norm = np.linalg.norm(vec)
             vec = vec / (norm + 1e-6)
-            return vec.tolist()
+            return vec.tolist(), True
 
-        # VeRi-776 ONNX pre-processing (224x224 input)
         import cv2
         resized = cv2.resize(crop, (224, 224))
         input_data = resized.astype(np.float32) / 255.0
@@ -52,7 +57,7 @@ class VehicleReID:
         embedding = outputs[0][0]
         norm = np.linalg.norm(embedding)
         embedding = embedding / (norm + 1e-6)
-        return embedding.tolist()
+        return embedding.tolist(), False
 
 
 def run_reid_on_vehicles(
@@ -90,7 +95,7 @@ def run_reid_on_vehicles(
             for det in vehicle_dets:
                 det_id = det["detection_id"]
                 f_idx = det["frame_index"]
-                
+
                 crop = None
                 if frames and 0 <= f_idx < len(frames):
                     frame = frames[f_idx]
@@ -102,9 +107,13 @@ def run_reid_on_vehicles(
                     if x2 > x1 and y2 > y1:
                         crop = frame[y1:y2, x1:x2]
 
-                emb = reid_engine.extract_embedding(crop)
+                emb, _is_sim = reid_engine.extract_embedding(crop)
                 reid_id = str(uuid.uuid4())
                 emb_json = json.dumps(emb)
+
+                label_text = reid_engine.label
+                if reid_engine.is_simulated:
+                    label_text += " (SIMULATED)"
 
                 conn.execute(
                     """
@@ -116,7 +125,7 @@ def run_reid_on_vehicles(
                         det_id,
                         file_id,
                         emb_json,
-                        reid_engine.label,
+                        label_text,
                     ),
                 )
                 inserted_ids.append(reid_id)

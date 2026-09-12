@@ -5,14 +5,17 @@ Any UI or report surface showing a Re-ID result MUST label it as an investigativ
 """
 
 import json
+import logging
 import os
 import sqlite3
 import uuid
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import numpy as np
 
 from app.engine8_ai import model_registry
 from app.engine7_case_db.models import INVESTIGATIVE_LEAD_LABEL
+
+logger = logging.getLogger(__name__)
 
 
 class PersonReID:
@@ -20,30 +23,30 @@ class PersonReID:
         self.model_name = model_name
         self.label = INVESTIGATIVE_LEAD_LABEL
         self.session = None
+        self.is_simulated = True
         try:
             self.session = model_registry.load_onnx_session(model_name, custom_path=custom_path)
-        except Exception:
-            # Session remains None if weights file not present or unverified
-            pass
+            self.is_simulated = False
+        except Exception as e:
+            logger.warning(f"SIMULATION FALLBACK: Model '{model_name}' could not be loaded ({e}). Person Re-ID embeddings will be marked is_simulated=True.")
+            self.is_simulated = True
 
-    def extract_embedding(self, crop: np.ndarray) -> List[float]:
+    def extract_embedding(self, crop: np.ndarray) -> Tuple[List[float], bool]:
         """
-        Extracts a normalized 512-d (or 256-d) feature vector embedding for a person crop image.
+        Extracts a normalized 256-d feature vector embedding for a person crop image.
+        Returns tuple: (embedding_list, is_simulated)
         """
         if self.session is None:
-            # Deterministic pseudo-embedding generator based on crop content for testing/fallback
             seed_val = int(np.sum(crop)) % 10000 if crop is not None and crop.size > 0 else 42
             rng = np.random.RandomState(seed_val)
             vec = rng.randn(256).astype(np.float32)
             norm = np.linalg.norm(vec)
             vec = vec / (norm + 1e-6)
-            return vec.tolist()
+            return vec.tolist(), True
 
-        # OSNet pre-processing (256x128 input)
         import cv2
         resized = cv2.resize(crop, (128, 256))
         input_data = resized.astype(np.float32) / 255.0
-        # ImageNet mean & std normalization
         mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
         std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
         input_data = (input_data - mean) / std
@@ -54,7 +57,7 @@ class PersonReID:
         embedding = outputs[0][0]
         norm = np.linalg.norm(embedding)
         embedding = embedding / (norm + 1e-6)
-        return embedding.tolist()
+        return embedding.tolist(), False
 
 
 def run_reid_on_detections(
@@ -92,7 +95,7 @@ def run_reid_on_detections(
             for det in person_dets:
                 det_id = det["detection_id"]
                 f_idx = det["frame_index"]
-                
+
                 crop = None
                 if frames and 0 <= f_idx < len(frames):
                     frame = frames[f_idx]
@@ -104,9 +107,13 @@ def run_reid_on_detections(
                     if x2 > x1 and y2 > y1:
                         crop = frame[y1:y2, x1:x2]
 
-                emb = reid_engine.extract_embedding(crop)
+                emb, _is_sim = reid_engine.extract_embedding(crop)
                 reid_id = str(uuid.uuid4())
                 emb_json = json.dumps(emb)
+
+                label_text = reid_engine.label
+                if reid_engine.is_simulated:
+                    label_text += " (SIMULATED)"
 
                 conn.execute(
                     """
@@ -118,7 +125,7 @@ def run_reid_on_detections(
                         det_id,
                         file_id,
                         emb_json,
-                        reid_engine.label,
+                        label_text,
                     ),
                 )
                 inserted_ids.append(reid_id)

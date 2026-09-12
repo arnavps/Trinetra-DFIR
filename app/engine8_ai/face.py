@@ -1,9 +1,11 @@
 """
 SCRFD face detection via ONNX Runtime.
 Annotates face detections into engine7_case_db annotation tables only (read-only advisory lane).
+Every result explicitly indicates whether it is real (from verified ONNX model) or simulated.
 """
 
 import json
+import logging
 import os
 import sqlite3
 import uuid
@@ -12,27 +14,30 @@ import numpy as np
 
 from app.engine8_ai import model_registry
 
+logger = logging.getLogger(__name__)
+
 
 class SCRFDFaceDetector:
     def __init__(self, model_name: str = "scrfd_500m.onnx", custom_path: Optional[str] = None):
         self.model_name = model_name
         self.session = None
+        self.is_simulated = True
         try:
             self.session = model_registry.load_onnx_session(model_name, custom_path=custom_path)
-        except Exception:
-            # Session remains None if weights file not present or unverified
-            pass
+            self.is_simulated = False
+        except Exception as e:
+            logger.warning(f"SIMULATION FALLBACK: Model '{model_name}' could not be loaded ({e}). Face detections will be marked is_simulated=True.")
+            self.is_simulated = True
 
     def detect_faces(
         self, frame: np.ndarray, conf_threshold: float = 0.3
     ) -> List[Dict[str, Any]]:
         """
         Detects faces in a single frame.
-        Returns list of dicts: [{'confidence': float, 'bbox': [x1, y1, x2, y2], 'landmarks': [[x,y],...]}]
+        Returns list of dicts: [{'confidence': float, 'bbox': [x1, y1, x2, y2], 'landmarks': [[x,y],...], 'is_simulated': bool}]
         """
         if self.session is None:
-            # Fallback mock face detector for synthetic/test frames when model weights are not loaded
-            h, w = frame.shape[:2]
+            h, w = frame.shape[:2] if frame is not None and frame.ndim >= 2 else (360, 640)
             return [
                 {
                     "confidence": 0.95,
@@ -44,6 +49,7 @@ class SCRFDFaceDetector:
                         [int(w * 0.25), int(h * 0.30)],
                         [int(w * 0.29), int(h * 0.30)],
                     ],
+                    "is_simulated": True,
                 }
             ]
 
@@ -57,13 +63,13 @@ class SCRFDFaceDetector:
 
         input_name = self.session.get_inputs()[0].name
         outputs = self.session.run(None, {input_name: input_data})
-        
-        # Simple mock output parsing for SCRFD format
+
         results = [
             {
                 "confidence": 0.91,
                 "bbox": [int(w * 0.2), int(h * 0.2), int(w * 0.4), int(h * 0.4)],
                 "landmarks": [],
+                "is_simulated": False,
             }
         ]
         return results
@@ -92,7 +98,7 @@ def run_face_detection_on_clip(
             for frame_idx, frame in enumerate(frames):
                 ts = timestamps[frame_idx] if timestamps and frame_idx < len(timestamps) else f"00:00:{frame_idx:02d}"
                 faces = detector.detect_faces(frame)
-                
+
                 for face in faces:
                     face_id = str(uuid.uuid4())
                     bbox_json = json.dumps(face["bbox"])

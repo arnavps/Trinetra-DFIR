@@ -2,35 +2,43 @@
   "description": "Every bundled weight + its trusted-source checksum; nothing loads without a manifest match.",
   "models": {
     "yolov8n.onnx": {
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256": "",
+      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
       "description": "YOLOv8n object/person/vehicle detector ONNX weights"
     },
     "scrfd_500m.onnx": {
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256": "",
+      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
       "description": "SCRFD 500M face detector ONNX weights"
     },
     "osnet_x0_25.onnx": {
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256": "",
+      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
       "description": "OSNet x0.25 Person Re-ID ONNX weights"
     },
     "clip_vit_b32_text.onnx": {
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256": "",
+      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
       "description": "CLIP ViT-B/32 Text Encoder ONNX weights"
     },
     "clip_vit_b32_image.onnx": {
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256": "",
+      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
       "description": "CLIP ViT-B/32 Image Encoder ONNX weights"
     },
     "yolov8n_plate.onnx": {
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256": "",
+      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
       "description": "YOLOv8n License Plate Detector Head ONNX weights"
     },
     "anpr_ocr.onnx": {
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256": "",
+      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
       "description": "CRNN/PaddleOCR Text Recognition ONNX weights fine-tuned on IndianLPR"
     },
     "veri776_reid.onnx": {
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256": "",
+      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
       "description": "FastReID VeRi-776 Vehicle Re-ID ONNX weights"
     }
   }

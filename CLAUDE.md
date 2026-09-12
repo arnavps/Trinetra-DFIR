@@ -71,6 +71,8 @@ before improvising an answer.
   real acquired drive. Keep them in a clearly-named constants module per
   parser, never inline, never presented as verified fact until a real
   drive confirms them.
+- [NEW, Hardening Pass] **No Silent AI Model Fallbacks**: All AI engines (`engine8_ai`) must fail-closed or explicitly propagate `is_simulated = True` when ONNX model weights are missing or unverified against `manifest.json`. Missing models MUST emit a `WARNING` log line, attach `(SIMULATED)` labels to UI/annotation rows, and render `SIMULATED / NO MODEL LOADED` annotations in generated compliance reports.
+- [NEW, Hardening Pass] **Strict Claim & Truth Alignment**: No code comment, docstring, UI string, or documentation file may claim a feature is certified or court-admissible unless the code genuinely implements it. Section 63 BSA outputs are always expert-ready technical draft PDFs requiring human signature.
 
 ## Coding conventions
 

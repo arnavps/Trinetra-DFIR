@@ -135,7 +135,7 @@ python main.py
    - **Disk Hex View**: Inspect raw sector bytes and ASCII representations at any byte offset.
    - **AI Semantic Search**: Search by class, camera channel, time range, or natural language (e.g., *"person with blue backpack"*).
    - **Suspect Journey Re-ID**: Cross-reference candidate suspect matches across camera channels.
-4. **Generate Court Certificate**: Click **`Generate BSA Sec. 63 Certificate`** to produce the court-ready PDF report saved in `demo_case/BSA_Sec63_CASE-SYNTHETIC-HIKVISION.pdf`.
+4. **Generate Court Certificate**: Click **`Generate BSA Sec. 63 Certificate`** to produce the Section 63 BSA technical draft PDF report saved in `demo_case/BSA_Sec63_CASE-SYNTHETIC-HIKVISION.pdf`.
 5. **Export Convenience Copy**: Click **`Export Derivative Clip`** to generate an isolated, separately-hashed MP4 convenience copy.
 
 ---
@@ -145,14 +145,14 @@ python main.py
 Run the full automated test suite (unit + end-to-end integration tests):
 
 ```bash
-# Run Python test suite (38 tests)
+# Run Python test suite (51 tests)
 pytest
 
 # Run Rust core tests
 cargo test --manifest-path rust_core/Cargo.toml
 ```
 
-All 38 test suites pass with 100% success across acquisition, parsing, carving, in-memory decoding, AI triage, timeline normalizer, compliance report generation, and derivative export boundaries.
+All 51 tests pass cleanly across acquisition, parsing, carving, in-memory decoding, AI triage, timeline normalizer, compliance report generation, and derivative export boundaries.
 
 ---
 

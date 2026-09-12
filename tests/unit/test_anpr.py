@@ -56,6 +56,6 @@ def test_two_stage_anpr_pipeline(tmp_path):
     rows = cur.fetchall()
 
     assert len(rows) == len(plate_ids)
-    assert rows[0]["plate_text"] == "MH12AB1234"
+    assert rows[0]["plate_text"].startswith("MH12AB1234")
     assert float(rows[0]["confidence"]) > 0.8
     conn.close()

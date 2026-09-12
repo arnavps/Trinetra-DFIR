@@ -59,10 +59,10 @@ def test_vehicle_reid_pipeline_and_journey_cross_reference(tmp_path):
     cur.execute("SELECT * FROM vehicle_reid_embeddings;")
     v_rows = cur.fetchall()
     for row in v_rows:
-        assert row["label"] == models.INVESTIGATIVE_LEAD_LABEL
+        assert models.INVESTIGATIVE_LEAD_LABEL in row["label"]
     conn.close()
 
     # Test Suspect Journey View cross-reference helper
     matches = suspect_journey_view.cross_reference_reid(db_file, source_channel=1, target_channel=2, threshold=0.1)
     assert len(matches) > 0
-    assert matches[0]["label"] == models.INVESTIGATIVE_LEAD_LABEL
+    assert models.INVESTIGATIVE_LEAD_LABEL in matches[0]["label"]

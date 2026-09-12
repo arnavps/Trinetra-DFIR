@@ -1,4 +1,4 @@
-"""Basic PDF/JSON report assembly in Phase 4; full Sec.63 formatting layered in in Phase 7."""
+"""Basic PDF/JSON report assembly; full Sec.63 formatting layered in Phase 7 and AI verification status annotations."""
 
 import json
 import os
@@ -10,21 +10,29 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 from app.engine7_case_db.audit_log import verify_audit_chain, get_extracted_files, get_db_connection
+from app.engine8_ai.model_registry import verify_all_models
 
 
 def build_json_report(db_path: str, case_id: str) -> Dict[str, Any]:
     chain_valid = verify_audit_chain(db_path, case_id)
     files = get_extracted_files(db_path, case_id)
+    models_status = verify_all_models()
 
     conn = get_db_connection(db_path)
     cursor = conn.cursor()
     cursor.execute("SELECT timestamp, event_type, details, previous_hash, entry_hash FROM audit_log WHERE case_id = ? ORDER BY entry_id ASC", (case_id,))
     audit_rows = cursor.fetchall()
+    
+    # Query detections summary
+    cursor.execute("SELECT count(*) as cnt FROM detections")
+    det_count = cursor.fetchone()["cnt"]
     conn.close()
 
     return {
         "case_id": case_id,
         "audit_chain_valid": chain_valid,
+        "models_verification": models_status,
+        "detections_count": det_count,
         "extracted_files": [
             {
                 "file_id": f.file_id,
@@ -100,6 +108,16 @@ def generate_case_report_pdf(db_path: str, case_id: str, output_pdf_path: str) -
 
     story.append(Spacer(1, 14))
 
+    # AI Verification Status Section
+    story.append(Paragraph("<b>AI Analytics Verification Status:</b>", styles['Heading2']))
+    story.append(Spacer(1, 6))
+    for m_name, m_info in report_data["models_verification"].items():
+        st = m_info["status"]
+        st_text = f"<font color='green'>VERIFIED</font>" if st == "VERIFIED" else f"<font color='red'>SIMULATED / NO MODEL LOADED ({st})</font>"
+        story.append(Paragraph(f"• <b>{m_name}:</b> {st_text}", styles['Normal']))
+
+    story.append(Spacer(1, 14))
+
     # Audit Chain Log Section
     story.append(Paragraph("<b>Chain of Custody Audit Log:</b>", styles['Heading2']))
     story.append(Spacer(1, 6))
@@ -161,4 +179,3 @@ def generate_case_report_pdf_with_sec63(db_path: str, case_id: str, output_pdf_p
 
     doc.build(story)
     return output_pdf_path
-

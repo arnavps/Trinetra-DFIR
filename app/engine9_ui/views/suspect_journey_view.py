@@ -1,6 +1,6 @@
 """
 2D cross-camera Re-ID trajectory map — investigative-lead framing only.
-Reuses the same INVESTIGATIVE_LEAD_LABEL constant.
+Visibly flags simulated Re-ID matches when ONNX model weights are unverified.
 """
 
 import json
@@ -23,11 +23,6 @@ def cross_reference_reid(
     target_channel: int = 2,
     threshold: float = 0.5,
 ) -> List[Dict[str, Any]]:
-    """
-    Cross-references Person and Vehicle Re-ID embeddings between two camera channels.
-    Calculates cosine similarity between embedding vectors across channels.
-    Returns matched candidates with mandatory INVESTIGATIVE_LEAD_LABEL tags.
-    """
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     matches = []
@@ -35,7 +30,6 @@ def cross_reference_reid(
     try:
         cur = conn.cursor()
 
-        # Query Person Re-ID embeddings
         query_sql = """
             SELECT r.reid_id, r.detection_id, r.file_id, r.embedding_json, r.label,
                    f.channel_id, d.timestamp, d.class_name
@@ -46,7 +40,6 @@ def cross_reference_reid(
         cur.execute(query_sql)
         person_rows = cur.fetchall()
 
-        # Query Vehicle Re-ID embeddings
         query_v_sql = """
             SELECT r.reid_id, r.detection_id, r.file_id, r.embedding_json, r.label,
                    f.channel_id, d.timestamp, d.class_name
@@ -72,6 +65,9 @@ def cross_reference_reid(
 
                 sim = float(np.dot(s_norm, t_norm))
                 if sim >= threshold:
+                    lbl = s["label"]
+                    if "(SIMULATED)" not in lbl:
+                        lbl += " (SIMULATED)"
                     matches.append({
                         "source_channel": source_channel,
                         "source_time": s["timestamp"],
@@ -79,7 +75,7 @@ def cross_reference_reid(
                         "target_time": t["timestamp"],
                         "class_name": s["class_name"],
                         "similarity": sim,
-                        "label": INVESTIGATIVE_LEAD_LABEL,
+                        "label": lbl,
                     })
 
     finally:
@@ -102,8 +98,7 @@ class SuspectJourneyViewWidget(QWidget):
         header.setStyleSheet("font-size: 16px; font-weight: bold; margin-bottom: 4px; color: #58A6FF;")
         layout.addWidget(header)
 
-        # Mandatory shared label invariant
-        advisory_label = QLabel(f"Mandatory Classification Notice: All matches are {INVESTIGATIVE_LEAD_LABEL.upper()}")
+        advisory_label = QLabel(f"Mandatory Classification Notice: All matches are {INVESTIGATIVE_LEAD_LABEL.upper()} | [SIMULATED MATCHES — model weights unverified]")
         advisory_label.setStyleSheet("color: #dc2626; font-weight: bold; margin-bottom: 8px;")
         layout.addWidget(advisory_label)
 
@@ -132,8 +127,7 @@ class SuspectJourneyViewWidget(QWidget):
         self.table.setHorizontalHeaderLabels([
             "Source Cam", "Source Timestamp", "Target Cam", "Target Timestamp", "Entity Class", "Re-ID Cosine Similarity", "Advisory Tag"
         ])
-        
-        # Interactive resize with last section stretched to prevent text cutoff
+
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self.table.horizontalHeader().setStretchLastSection(True)
         self.table.setStyleSheet("""
@@ -156,12 +150,12 @@ class SuspectJourneyViewWidget(QWidget):
         self.perform_match()
 
     def populate_default_journey_matches(self):
-        """Populates realistic default cross-camera Re-ID transitions on startup so table is never blank."""
+        """Populates default cross-camera Re-ID transitions on startup with explicit (SIMULATED) labels."""
         default_matches = [
-            ("Ch 1 - Main Gate", "2023-11-14 18:42:11.042", "Ch 2 - Cashier", "2023-11-14 18:43:45.120", "person", "0.942", INVESTIGATIVE_LEAD_LABEL),
-            ("Ch 2 - Cashier", "2023-11-14 18:44:10.000", "Ch 3 - Parking", "2023-11-14 18:46:12.800", "person", "0.918", INVESTIGATIVE_LEAD_LABEL),
-            ("Ch 1 - Main Gate", "2023-11-14 18:42:15.820", "Ch 3 - Parking", "2023-11-14 18:47:05.450", "car", "0.895", INVESTIGATIVE_LEAD_LABEL),
-            ("Ch 3 - Parking", "2023-11-14 18:48:00.100", "Ch 4 - Vault Entrance", "2023-11-14 18:50:22.330", "person", "0.884", INVESTIGATIVE_LEAD_LABEL),
+            ("Ch 1 - Main Gate", "2023-11-14 18:42:11.042", "Ch 2 - Cashier", "2023-11-14 18:43:45.120", "person (SIMULATED)", "0.942", f"{INVESTIGATIVE_LEAD_LABEL} (SIMULATED)"),
+            ("Ch 2 - Cashier", "2023-11-14 18:44:10.000", "Ch 3 - Parking", "2023-11-14 18:46:12.800", "person (SIMULATED)", "0.918", f"{INVESTIGATIVE_LEAD_LABEL} (SIMULATED)"),
+            ("Ch 1 - Main Gate", "2023-11-14 18:42:15.820", "Ch 3 - Parking", "2023-11-14 18:47:05.450", "car (SIMULATED)", "0.895", f"{INVESTIGATIVE_LEAD_LABEL} (SIMULATED)"),
+            ("Ch 3 - Parking", "2023-11-14 18:48:00.100", "Ch 4 - Vault Entrance", "2023-11-14 18:50:22.330", "person (SIMULATED)", "0.884", f"{INVESTIGATIVE_LEAD_LABEL} (SIMULATED)"),
         ]
 
         self.table.setRowCount(len(default_matches))

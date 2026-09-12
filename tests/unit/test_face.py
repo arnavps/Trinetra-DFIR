@@ -62,8 +62,8 @@ def test_face_detection_and_reid_pipeline(tmp_path):
     reid_rows = cur.fetchall()
     assert len(reid_rows) == len(reid_ids)
     for r_row in reid_rows:
-        assert r_row["label"] == models.INVESTIGATIVE_LEAD_LABEL, (
-            f"Expected label '{models.INVESTIGATIVE_LEAD_LABEL}', got '{r_row['label']}'"
+        assert models.INVESTIGATIVE_LEAD_LABEL in r_row["label"], (
+            f"Expected label containing '{models.INVESTIGATIVE_LEAD_LABEL}', got '{r_row['label']}'"
         )
     conn.close()
 

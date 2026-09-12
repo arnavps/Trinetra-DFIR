@@ -68,14 +68,14 @@ class VideoTileWidget(QWidget):
         self.render_frame_at(0)
         return True
 
-    def load_stream(self, stream_buffer: bytes, oem: str = "auto") -> int:
+    def load_stream(self, stream_buffer: bytes, oem: str = "auto", max_frames: Optional[int] = 60) -> int:
         """Loads a raw stream buffer via StreamDecoder."""
         self.timer.stop()
         if self.cap:
             self.cap.release()
             self.cap = None
 
-        self.decoder = StreamDecoder(stream_buffer, oem=oem)
+        self.decoder = StreamDecoder(stream_buffer, oem=oem, max_frames=max_frames)
         self.current_frame_idx = 0
 
         frame_count = self.decoder.get_frame_count()

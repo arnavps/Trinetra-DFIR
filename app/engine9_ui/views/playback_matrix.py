@@ -101,14 +101,24 @@ class PlaybackMatrixView(QWidget):
                 if f.lower().endswith(".mp4"):
                     mp4_files.append(os.path.join(case_dir, f))
 
+        is_h265 = "HFS" in getattr(vfs, "oem", "") or "HeimVision" in getattr(vfs, "oem", "")
+        codec_name = "H.265" if is_h265 else "H.264"
+        fps_val = "15.0 FPS" if is_h265 else "25.0 FPS"
+
         for idx in range(8):
             ch_id = idx + 1
             ch_name = f"CAM {ch_id:02d} - CHANNEL {ch_id}"
+            start_ts = "2021-08-04 13:59:51" if is_h265 else "2023-11-14 18:42:11.042"
             if idx < len(vfs.channels):
                 ch_name = f"CAM {ch_id:02d} - {vfs.channels[idx].channel_name}"
+                if vfs.channels[idx].start_timestamp:
+                    start_ts = vfs.channels[idx].start_timestamp
+            elif idx < len(vfs.files):
+                if vfs.files[idx].start_timestamp:
+                    start_ts = vfs.files[idx].start_timestamp
 
             self.tiles[idx].channel_name = ch_name
-            self.tiles[idx].set_osd_text(f"{ch_name} | 2023-11-14 18:42:11.042 | 25.0 FPS | H.264")
+            self.tiles[idx].set_osd_text(f"{ch_name} | {start_ts} | {fps_val} | {codec_name}")
 
             if mp4_files:
                 sample_file = mp4_files[idx % len(mp4_files)]

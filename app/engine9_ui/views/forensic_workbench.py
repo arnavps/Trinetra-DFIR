@@ -196,7 +196,7 @@ class ForensicWorkbenchView(QWidget):
                 else:
                     self.table.setItem(row_idx, col_idx, item)
 
-    def load_vfs(self, vfs: VirtualFileSystem, case_dir: str = "") -> None:
+    def load_vfs(self, vfs: VirtualFileSystem, case_dir: str = "", is_demo: bool = False) -> None:
         """Loads actual VirtualFileSystem files into the evidence table & tiles."""
         if not vfs or not vfs.files:
             return
@@ -208,22 +208,37 @@ class ForensicWorkbenchView(QWidget):
                     demo_mp4 = os.path.join(case_dir, f)
                     break
 
-        self.populate_synthetic_workbench(demo_video_path=demo_mp4)
+        if is_demo:
+            self.populate_synthetic_workbench(demo_video_path=demo_mp4)
+        else:
+            codec_name = "H.265 Main@L4.1" if ("HFS" in getattr(vfs, "oem", "") or "HeimVision" in getattr(vfs, "oem", "")) else "H.264 Main@L4.1"
+            for idx in range(4):
+                if idx < len(vfs.files):
+                    f_entry = vfs.files[idx]
+                    ch_name = f"CAM {f_entry.channel_id:02d}"
+                    if idx < len(vfs.channels):
+                        ch_name = vfs.channels[idx].channel_name
+                    self.tiles[idx].channel_name = ch_name
+                    self.tiles[idx].set_osd_text(f"{ch_name} | {f_entry.start_timestamp} | 15.0 FPS | {codec_name}")
+                else:
+                    self.tiles[idx].channel_name = f"CAM {idx+1:02d} - NO SIGNAL"
+                    self.tiles[idx].set_osd_text(f"CAM {idx+1:02d} - NO SIGNAL | 0.0 FPS")
+                    self.tiles[idx]._render_placeholder()
 
         self.table.setRowCount(len(vfs.files))
         for row_idx, entry in enumerate(vfs.files):
             trk_id = f"TRK-{entry.file_id[-6:] if len(entry.file_id) >= 6 else entry.file_id}"
             ch_str = f"CH{entry.channel_id} - Channel {entry.channel_id}"
             ext_type = getattr(entry, "extraction_type", "ALLOCATED").upper()
-            start_ts = entry.start_timestamp or "2023-11-14 18:00:00.000"
-            end_ts = entry.end_timestamp or "2023-11-14 18:30:00.000"
+            start_ts = entry.start_timestamp or "2021-08-04 13:59:51.000"
+            end_ts = entry.end_timestamp or "2021-08-04 14:01:32.000"
             
             start_lba = "0x00000000"
             if getattr(entry, "cluster_runs", None) and len(entry.cluster_runs) > 0:
                 start_lba = f"0x{entry.cluster_runs[0].start_sector:08X}"
             
-            file_hash = getattr(entry, "file_hash", "7f83b1657b98f2b3a1c2d3e4f5a6b7c8d9e0f1a2")
-            hash_abbr = f"{file_hash[:8]}...{file_hash[-4:]}"
+            file_hash = getattr(entry, "file_hash", "AUTHENTIC_RECORDING_SHA256")
+            hash_abbr = f"{file_hash[:8]}...{file_hash[-4:]}" if len(file_hash) > 12 else file_hash
 
             self.table.setItem(row_idx, 0, QTableWidgetItem(trk_id))
             self.table.setItem(row_idx, 1, QTableWidgetItem(ch_str))

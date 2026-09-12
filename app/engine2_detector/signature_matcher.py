@@ -65,6 +65,26 @@ def match_signature(image_path: str, signatures_path: Optional[str] = None) -> M
                     description=sig.get("description", ""),
                 )
 
+        # Fallback for split segment images (e.g. .E02, .E03 missing earlier segments) where offset 0 is unallocated
+        if hasattr(reader, "ewf_chunks") and reader.ewf_chunks:
+            for chunk_idx, c in enumerate(reader.ewf_chunks):
+                if c.length != 52 and c.length != 0:
+                    first_active_offset = chunk_idx * 32768
+                    reader.seek(first_active_offset)
+                    sample = reader.read(4096)
+                    for sig in signatures:
+                        pattern = bytes.fromhex(sig["pattern_hex"])
+                        pos = sample.find(pattern)
+                        if pos != -1:
+                            return MatchResult(
+                                oem=sig["oem"],
+                                signature_id=sig["signature_id"],
+                                matched_offset=first_active_offset + pos,
+                                matched=True,
+                                description=sig.get("description", ""),
+                            )
+                    break
+
     return MatchResult(
         oem="Unknown",
         signature_id="none",

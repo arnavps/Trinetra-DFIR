@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.engine1_acquisition.acquirer import acquire_image
+from app.engine1_acquisition.image_reader import ImageReader
 from app.engine2_detector.signature_matcher import match_signature
 from app.engine3_parsers.dhfs_parser import DhfsParser
 from app.engine3_parsers.hikfat_parser import HikFatParser
@@ -528,7 +529,8 @@ class MainWindow(QMainWindow):
                 record_extracted_file(self.current_db_path, ext_file_rec)
 
             if self.current_vfs.files:
-                self._play_vfs_entry(self.current_vfs.files[0], tile_index=0)
+                for idx, file_entry in enumerate(self.current_vfs.files[:4]):
+                    self._play_vfs_entry(file_entry, tile_index=idx)
 
     def load_image(self, image_path: str, case_id: Optional[str] = None) -> None:
         """Compatibility bridge: routes directly to load_real_evidence."""
@@ -538,17 +540,21 @@ class MainWindow(QMainWindow):
         if not self.current_image_path or not os.path.exists(self.current_image_path):
             return
 
-        with open(self.current_image_path, "rb") as f:
+        with ImageReader(self.current_image_path) as reader:
             if getattr(entry, "cluster_runs", None):
                 start_sec = entry.cluster_runs[0].start_sector
                 sec_cnt = entry.cluster_runs[0].sector_count
-                f.seek(start_sec * 512)
-                stream_bytes = f.read(sec_cnt * 512)
+                reader.seek(start_sec * 512)
+                stream_bytes = reader.read(sec_cnt * 512)
             else:
-                f.seek(0)
-                stream_bytes = f.read(min(entry.size_bytes, 10 * 1024 * 1024))
+                reader.seek(0)
+                stream_bytes = reader.read(min(entry.size_bytes, 10 * 1024 * 1024))
 
-        self.view_playback.load_clip(stream_bytes, oem=self.current_vfs.oem if self.current_vfs else "auto", tile_index=tile_index)
+        oem_desc = self.current_vfs.oem if self.current_vfs else "auto"
+        self.view_playback.load_clip(stream_bytes, oem=oem_desc, tile_index=tile_index)
+        if hasattr(self, "view_workbench") and hasattr(self.view_workbench, "tiles"):
+            if 0 <= tile_index < len(self.view_workbench.tiles):
+                self.view_workbench.tiles[tile_index].load_stream(stream_bytes, oem=oem_desc)
 
     def _on_tree_item_double_clicked(self, item: QTreeWidgetItem, column: int) -> None:
         if not self.current_vfs:
@@ -584,13 +590,13 @@ class MainWindow(QMainWindow):
             tmp_raw = tmp.name
 
         try:
-            with open(self.current_image_path, "rb") as f_in, open(tmp_raw, "wb") as f_out:
+            with ImageReader(self.current_image_path) as reader, open(tmp_raw, "wb") as f_out:
                 if getattr(first_file, "cluster_runs", None):
-                    f_in.seek(first_file.cluster_runs[0].start_sector * 512)
-                    f_out.write(f_in.read(first_file.cluster_runs[0].sector_count * 512))
+                    reader.seek(first_file.cluster_runs[0].start_sector * 512)
+                    f_out.write(reader.read(first_file.cluster_runs[0].sector_count * 512))
                 else:
-                    f_in.seek(0)
-                    f_out.write(f_in.read(min(first_file.size_bytes, 10 * 1024 * 1024)))
+                    reader.seek(0)
+                    f_out.write(reader.read(min(first_file.size_bytes, 10 * 1024 * 1024)))
 
             out_export = os.path.join(os.path.dirname(self.current_db_path), f"export_{first_file.file_id}.mp4")
             res = export_derivative_clip(

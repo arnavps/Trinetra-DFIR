@@ -2,6 +2,7 @@
 
 import os
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit, QVBoxLayout, QWidget
+from app.engine1_acquisition.image_reader import ImageReader
 
 
 class DiskHexView(QWidget):
@@ -44,9 +45,9 @@ class DiskHexView(QWidget):
             offset = 0
 
         try:
-            with open(self.current_image_path, "rb") as f:
-                f.seek(offset)
-                data = f.read(512)
+            with ImageReader(self.current_image_path) as reader:
+                reader.seek(offset)
+                data = reader.read(512)
 
             lines = []
             for i in range(0, len(data), 16):

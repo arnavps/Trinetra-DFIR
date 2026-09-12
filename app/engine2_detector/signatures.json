@@ -24,6 +24,22 @@
       "pattern_hex": "4845494d564953494f4e",
       "description": "HeimVision HFS superblock ASCII signature 'HEIMVISION'",
       "confidence_note": "Deterministic primary signature hypothesis from literature"
+    },
+    {
+      "oem": "HeimVision",
+      "signature_id": "heimvision_hfs_luo",
+      "offset": 0,
+      "pattern_hex": "6c756f20",
+      "description": "HeimVision / Xiongmai HFS master index table signature 'luo '",
+      "confidence_note": "Deterministic index table header confirmed against physical DVR image"
+    },
+    {
+      "oem": "HeimVision",
+      "signature_id": "heimvision_xm_liu",
+      "offset": 0,
+      "pattern_hex": "6c697520",
+      "description": "HeimVision / Xiongmai video stream packet signature 'liu '",
+      "confidence_note": "Deterministic stream packet header confirmed against physical DVR image"
     }
   ]
 }

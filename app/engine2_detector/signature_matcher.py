@@ -27,9 +27,13 @@ def load_signatures(signatures_path: Optional[str] = None) -> list:
     return data.get("signatures", [])
 
 
+from app.engine1_acquisition.image_reader import ImageReader
+
+
 def match_signature(image_path: str, signatures_path: Optional[str] = None) -> MatchResult:
     """
     Scans known offsets from signatures.json against an image file read-only.
+    Supports single (.dd, .raw) and split EWF (.E01, .E02, .E03) images via ImageReader.
     Returns MatchResult indicating OEM and signature details if matched,
     or oem='Unknown', matched=False if no signature matches.
     """
@@ -38,8 +42,8 @@ def match_signature(image_path: str, signatures_path: Optional[str] = None) -> M
 
     signatures = load_signatures(signatures_path)
 
-    with open(image_path, "rb") as f:
-        file_size = f.seek(0, os.SEEK_END)
+    with ImageReader(image_path) as reader:
+        file_size = reader.size()
 
         for sig in signatures:
             offset = sig["offset"]
@@ -49,8 +53,8 @@ def match_signature(image_path: str, signatures_path: Optional[str] = None) -> M
             if offset + pattern_len > file_size:
                 continue
 
-            f.seek(offset)
-            read_bytes = f.read(pattern_len)
+            reader.seek(offset)
+            read_bytes = reader.read(pattern_len)
 
             if read_bytes == pattern:
                 return MatchResult(

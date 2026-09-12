@@ -11,21 +11,20 @@ from app.engine3_parsers.fs_base import (
     ExtractedFileEntry,
     ClusterRun,
 )
+from app.engine1_acquisition.image_reader import ImageReader
 from app.engine4_carver.frame_carver import carve_nal_units
 from app.engine4_carver.gop_reconstructor import reassemble_gop_fragments
 
 
 class GenericParser(FileSystemParser):
-    """
-    Best-effort carving fallback parser for unknown/undetected OEM filesystems.
-    Delegates to frame_carver.py and tags output extraction_type='carved_fragment'.
-    """
+    """Generic fallback parser that routes undetected OEM images to Engine 4 carving."""
 
     def parse(self, image_path: str) -> VirtualFileSystem:
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Image path '{image_path}' does not exist.")
 
-        file_size = os.path.getsize(image_path)
+        with ImageReader(image_path) as f:
+            file_size = f.size()
         nal_units = carve_nal_units(image_path)
         gop_fragments = reassemble_gop_fragments(nal_units)
 

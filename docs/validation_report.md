@@ -1,9 +1,10 @@
 # Tri-Netra — Reality Reconciliation & System Validation Report
 
 **Validation Date**: September 12, 2026  
-**Test Suite**: 53 Automated Tests (52 Unit Tests + 1 Full End-to-End Integration Suite)  
+**Validation Date**: September 12, 2026  
+**Test Suite**: 56 Automated Tests (55 Unit Tests + 1 Full End-to-End Integration Suite)  
 **Target Environment**: Windows 11 x64 / Linux x64 (CPU-Only, Air-Gapped, Headless PySide6 supported)  
-**Overall Status**: **PASS (53/53 Tests Passing — 100% Success Rate)**  
+**Overall Status**: **PASS (56/56 Tests Passing — 100% Success Rate)**  
 
 ---
 
@@ -16,6 +17,7 @@ Tri-Netra underwent an independent audit and truth-alignment hardening pass to e
 3. **Rust PyO3 Hot-Path Integration**: `rust_core/src/nal_scanner.rs` was fully implemented in Rust and registered via PyO3 bindings (`unidvr_rustcore.find_nal_start_codes`). `frame_carver.py` executes Rust NAL unit scanning on sector reads with fallback to Python.
 4. **Deterministic Tamper & Anti-Splice Engine**: `tamper_check.py` implements QP (Quantization Parameter) discontinuity detection and duplicate GOP frame analysis over decoded stream metadata, persisting hash-chained audit log records.
 5. **Hardened Write-Block & Sandbox Boundaries**: Write-block verification executes dual low-level read-write attempts (`r+b` and `os.O_RDWR`), failing safely under elevated (root/Administrator) execution. Stream decoding runs within process sandboxing (`security/sandbox.py`) to contain malformed inputs.
+6. **Split EWF (.E01, .E02, .E03) Image Reader**: Implemented unified `ImageReader` abstraction in Engine 1 supporting single (.dd, .raw) and split EWF segment files across sector read/seek boundaries.
 
 ---
 
@@ -33,16 +35,17 @@ Tri-Netra underwent an independent audit and truth-alignment hardening pass to e
 | **P1 3.3** | Cross-platform write-block check | Hardened `writeblock_check.py` with dual direct sector write attempts; added root/Administrator edge case simulation. | `test_compliance.py` (2/2) |
 | **P1 3.4** | Remuxer single-caller static invariant | Added AST/regex static analysis test ensuring `remuxer.py` is imported strictly by `export_module.py`. | `test_remuxer_single_caller.py` (1/1) |
 | **P1 3.5** | Sandbox decoder process isolation | Verified `security/sandbox.py` process wrapping for decoder, handling truncated NAL streams safely without crashing main app. | `test_decoder_no_persistent_files.py` (2/2) |
-| **P1 3.6** | Headless test suite execution | Configured `QT_QPA_PLATFORM=offscreen` in `conftest.py`. Cargo check & Pytest pass 100% headlessly. | `pytest` (53/53 PASS) |
+| **P1 3.6** | Headless test suite execution | Configured `QT_QPA_PLATFORM=offscreen` in `conftest.py`. Cargo check & Pytest pass 100% headlessly. | `pytest` (56/56 PASS) |
 | **P2** | Uniview (UFS) & physical hardware verification | UFS routes to generic carving fallback. Documented physical hardware byte offset validation as primary real-world risk item. | `validation_report.md` (Known Limitations) |
 
 ---
 
-## 3. Test Suite Execution Summary (53 / 53 Passed)
+## 3. Test Suite Execution Summary (56 / 56 Passed)
 
 | Engine / Component Module | Test File | Passed / Total | Key Verified Behaviors |
 | :--- | :--- | :--- | :--- |
 | **Engine 1 (Acquisition & Hashing)** | `test_hasher.py` | 5 / 5 | PyO3 Rust streaming MD5/SHA-256 & Merkle tree root/leaf generation |
+| **Engine 1 (ImageReader & Split E01)**| `test_image_reader.py` | 3 / 3 | Single (.dd) and split (.E01, .E02, .E03) file-like reading & EWF magic detection |
 | **Engine 1 (Write-Block Check)** | `test_compliance.py` | 2 / 2 | Cross-platform write attempt enforcement & root edge case handling |
 | **Engine 2 (Detector & Classifier)** | `test_detector.py` | 3 / 3 | OEM signature matching & Random Forest sector fallback classifier |
 | **Engine 3 (Hikvision HIKFAT)** | `test_hikfat_parser.py` | 4 / 4 | HIKFAT Master Index Table parsing, superblock validation, channel mapping |

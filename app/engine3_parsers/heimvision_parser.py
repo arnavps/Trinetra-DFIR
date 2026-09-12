@@ -16,6 +16,7 @@ from app.engine3_parsers.fs_base import (
     ExtractedFileEntry,
     ClusterRun,
 )
+from app.engine1_acquisition.image_reader import ImageReader
 from app.engine3_parsers import heimvision_constants as const
 
 
@@ -26,8 +27,8 @@ class HeimVisionParser(FileSystemParser):
         if not os.path.exists(image_path):
             raise FileNotFoundError(f"Image path '{image_path}' does not exist.")
 
-        with open(image_path, "rb") as f:
-            file_size = f.seek(0, os.SEEK_END)
+        with ImageReader(image_path) as f:
+            file_size = f.size()
 
             # 1. Verify Superblock Magic
             if file_size < len(const.HEIMVISION_SUPERBLOCK_MAGIC):

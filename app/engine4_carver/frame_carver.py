@@ -46,17 +46,21 @@ def find_nal_start_codes(data: bytes, max_units: int = 2000) -> List[int]:
     return offsets
 
 
+from app.engine1_acquisition.image_reader import ImageReader
+
+
 def carve_nal_units(source: Union[str, bytes], start_offset: int = 0, max_bytes: int = 64 * 1024 * 1024) -> List[bytes]:
     """
     Heuristically carves raw NAL unit elementary stream blocks from unallocated or corrupted sector data.
     Recovered output is returned exactly as scanned — raw elementary stream bytes with no container wrapper.
+    Supports single (.dd, .raw) and EWF container (.E01, .E02, .E03, .eo3) decompressed streams via ImageReader.
     """
     if isinstance(source, str):
         if not os.path.exists(source):
             raise FileNotFoundError(f"Source path '{source}' does not exist.")
-        file_size = os.path.getsize(source)
-        read_size = min(file_size - start_offset, max_bytes)
-        with open(source, "rb") as f:
+        with ImageReader(source) as f:
+            file_size = f.size()
+            read_size = min(file_size - start_offset, max_bytes)
             f.seek(start_offset)
             data = f.read(read_size)
     else:

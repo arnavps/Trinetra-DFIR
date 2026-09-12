@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from app.engine1_acquisition.image_reader import ImageReader, find_split_segments, EWF_MAGIC_HEADER
+from app.engine1_acquisition.image_reader import ImageReader, find_split_segments, EWF_MAGIC_HEADERS
 
 
 def test_find_split_segments(tmp_path):
@@ -43,7 +43,7 @@ def test_image_reader_multi_segment_e01_e02_e03(tmp_path):
     e02_path = os.path.join(tmp_path, "evidence.E02")
     e03_path = os.path.join(tmp_path, "evidence.E03")
 
-    payload1 = EWF_MAGIC_HEADER + b"CHUNK1_DATA_"
+    payload1 = EWF_MAGIC_HEADERS[0] + b"CHUNK1_DATA_"
     payload2 = b"CHUNK2_SPLIT_DATA_"
     payload3 = b"CHUNK3_TAIL_DATA"
 
@@ -74,7 +74,7 @@ def test_image_reader_opening_e03_or_eo3_directly(tmp_path):
     e02_path = os.path.join(tmp_path, "heim_drive.eo2")
     eo3_path = os.path.join(tmp_path, "heim_drive.eo3")
 
-    payload1 = EWF_MAGIC_HEADER + b"HEIMVISION_SUPERBLOCK_SECTOR_0"
+    payload1 = EWF_MAGIC_HEADERS[0] + b"HEIMVISION_SUPERBLOCK_SECTOR_0"
     payload2 = b"HEIMVISION_DATA_SECTOR_CHUNK2"
     payload3 = b"HEIMVISION_INDEX_TABLE_SECTOR_TAIL"
 
@@ -89,7 +89,7 @@ def test_image_reader_opening_e03_or_eo3_directly(tmp_path):
     with ImageReader(eo3_path) as reader:
         assert reader.is_ewf
         assert reader.segment_count == 3
-        header_data = reader.read(len(EWF_MAGIC_HEADER))
-        assert header_data == EWF_MAGIC_HEADER
+        header_data = reader.read(len(EWF_MAGIC_HEADERS[0]))
+        assert header_data == EWF_MAGIC_HEADERS[0]
         assert b"HEIMVISION_SUPERBLOCK" in reader.read(100)
 

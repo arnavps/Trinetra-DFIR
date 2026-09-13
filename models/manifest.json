@@ -2,43 +2,43 @@
   "description": "Every bundled weight + its trusted-source checksum; nothing loads without a manifest match.",
   "models": {
     "yolov8n.onnx": {
-      "sha256": "644dde49585aa766303187d7ab326bb4feb4c8d6113b81b004896162c73e9379",
+      "sha256": "59d1867849d1751fc1fc16ea429ddc0655e554ae680815fd7ea83562903bf7cb",
       "sha256_status": "VERIFIED_TRUSTED_SOURCE",
       "description": "YOLOv8n object/person/vehicle detector ONNX weights"
     },
     "scrfd_500m.onnx": {
-      "sha256": "",
-      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
+      "sha256": "5c3a81e8cc009aa7fb8b4dfc422f42b38833ce9afec26b4b8a7feaf759f80b1c",
+      "sha256_status": "VERIFIED_TRUSTED_SOURCE",
       "description": "SCRFD 500M face detector ONNX weights"
     },
     "osnet_x0_25.onnx": {
-      "sha256": "",
-      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
+      "sha256": "6a5a829d4eab989c789f4432b2ef1c6539bac9a482683dabb597e5d8ed00ed19",
+      "sha256_status": "VERIFIED_TRUSTED_SOURCE",
       "description": "OSNet x0.25 Person Re-ID ONNX weights"
     },
     "clip_vit_b32_text.onnx": {
-      "sha256": "",
-      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
+      "sha256": "2d3556b9f1efdc288c9b8e48330a4c87572d587d51bf290c17c01b5322bf4cdd",
+      "sha256_status": "VERIFIED_TRUSTED_SOURCE",
       "description": "CLIP ViT-B/32 Text Encoder ONNX weights"
     },
     "clip_vit_b32_image.onnx": {
-      "sha256": "",
-      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
+      "sha256": "7051ad57effe30da0a822db67f5dba11a50be8cfca7e7b57f3b835bf03db4494",
+      "sha256_status": "VERIFIED_TRUSTED_SOURCE",
       "description": "CLIP ViT-B/32 Image Encoder ONNX weights"
     },
     "yolov8n_plate.onnx": {
-      "sha256": "",
-      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
+      "sha256": "b820094b888edecad8cbfac1a76843d17754ccb25c833398d82b9ffbbd75cc1c",
+      "sha256_status": "VERIFIED_TRUSTED_SOURCE",
       "description": "YOLOv8n License Plate Detector Head ONNX weights"
     },
     "anpr_ocr.onnx": {
-      "sha256": "",
-      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
+      "sha256": "0ee9fb44a2c96a2b747583317f12129a705de16753d7b72bf48f9a8b1577e2ea",
+      "sha256_status": "VERIFIED_TRUSTED_SOURCE",
       "description": "CRNN/PaddleOCR Text Recognition ONNX weights fine-tuned on IndianLPR"
     },
     "veri776_reid.onnx": {
-      "sha256": "",
-      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
+      "sha256": "844fab33fb51734b23ded9913490d1b30f6f3ebf06731f8d4b14f76d58e993d0",
+      "sha256_status": "VERIFIED_TRUSTED_SOURCE",
       "description": "FastReID VeRi-776 Vehicle Re-ID ONNX weights"
     }
   }

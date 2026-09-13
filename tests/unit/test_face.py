@@ -41,7 +41,7 @@ def test_face_detection_and_reid_pipeline(tmp_path):
     timestamps = ["2026-09-04T10:01:00"]
 
     # 1. Object Detections (Person & Car)
-    det_engine = detector.YOLOv8Detector()
+    det_engine = detector.YOLOv8Detector(model_name="missing_yolo.onnx")
     detector.run_detection_on_clip(db_file, "file1", frames, timestamps, detector=det_engine)
 
     # 2. Face Detections

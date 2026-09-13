@@ -108,21 +108,6 @@ class YOLOv8Detector:
                 "is_simulated": False,
             })
 
-        if len(results) == 0:
-            # Provide detections on synthetic/blank frames so downstream analytical pipelines operate
-            results.append({
-                "class_name": "person",
-                "confidence": 0.88,
-                "bbox": [int(w * 0.1), int(h * 0.1), int(w * 0.4), int(h * 0.8)],
-                "is_simulated": False,
-            })
-            results.append({
-                "class_name": "car",
-                "confidence": 0.90,
-                "bbox": [int(w * 0.5), int(h * 0.3), int(w * 0.9), int(h * 0.7)],
-                "is_simulated": False,
-            })
-
         return results
 
 

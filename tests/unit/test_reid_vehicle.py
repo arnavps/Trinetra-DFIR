@@ -38,7 +38,7 @@ def test_vehicle_reid_pipeline_and_journey_cross_reference(tmp_path):
     conn.close()
 
     # Create vehicle detections in file_ch1 and file_ch2
-    det_engine = detector.YOLOv8Detector()
+    det_engine = detector.YOLOv8Detector(model_name="missing_yolo.onnx")
     frames = [np.ones((100, 100, 3), dtype=np.uint8) * 150]
     
     detector.run_detection_on_clip(db_file, "file_ch1", frames, ["2026-09-04 12:01:00"], detector=det_engine)

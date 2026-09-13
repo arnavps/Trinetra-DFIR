@@ -70,7 +70,13 @@ def test_detector_run_and_read_only_advisory_lane(tmp_path):
     ]
     timestamps = ["2026-09-04T12:00:05", "2026-09-04T12:00:10"]
 
-    det_engine = detector.YOLOv8Detector()
+    # Live model check: Ensure genuine neural net does NOT hallucinate objects on blank frames
+    live_engine = detector.YOLOv8Detector()
+    assert live_engine.is_simulated is False
+    assert len(live_engine.detect_frame(frames[0])) == 0, "Real YOLO must return empty list on blank frame"
+
+    # Pipeline test on synthetic frames using simulated detector
+    det_engine = detector.YOLOv8Detector(model_name="missing_yolo.onnx")
     det_ids = detector.run_detection_on_clip(
         db_path=db_file,
         file_id="file1",

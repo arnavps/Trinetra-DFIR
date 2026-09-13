@@ -2,8 +2,8 @@
   "description": "Every bundled weight + its trusted-source checksum; nothing loads without a manifest match.",
   "models": {
     "yolov8n.onnx": {
-      "sha256": "",
-      "sha256_status": "PLACEHOLDER_NOT_YET_SOURCED",
+      "sha256": "644dde49585aa766303187d7ab326bb4feb4c8d6113b81b004896162c73e9379",
+      "sha256_status": "VERIFIED_TRUSTED_SOURCE",
       "description": "YOLOv8n object/person/vehicle detector ONNX weights"
     },
     "scrfd_500m.onnx": {

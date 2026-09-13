@@ -90,7 +90,6 @@ class SuspectJourneyViewWidget(QWidget):
         super().__init__(parent)
         self.db_path = db_path
         self.init_ui()
-        self.populate_default_journey_matches()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -150,24 +149,9 @@ class SuspectJourneyViewWidget(QWidget):
         self.db_path = db_path
         self.perform_match()
 
-    def populate_default_journey_matches(self):
-        """Populates default cross-camera Re-ID transitions on startup with explicit (SIMULATED) labels."""
-        default_matches = [
-            ("Ch 1 - Main Gate", "2023-11-14 18:42:11.042", "Ch 2 - Cashier", "2023-11-14 18:43:45.120", "person (SIMULATED)", "0.942", f"{INVESTIGATIVE_LEAD_LABEL} (SIMULATED)"),
-            ("Ch 2 - Cashier", "2023-11-14 18:44:10.000", "Ch 3 - Parking", "2023-11-14 18:46:12.800", "person (SIMULATED)", "0.918", f"{INVESTIGATIVE_LEAD_LABEL} (SIMULATED)"),
-            ("Ch 1 - Main Gate", "2023-11-14 18:42:15.820", "Ch 3 - Parking", "2023-11-14 18:47:05.450", "car (SIMULATED)", "0.895", f"{INVESTIGATIVE_LEAD_LABEL} (SIMULATED)"),
-            ("Ch 3 - Parking", "2023-11-14 18:48:00.100", "Ch 4 - Vault Entrance", "2023-11-14 18:50:22.330", "person (SIMULATED)", "0.884", f"{INVESTIGATIVE_LEAD_LABEL} (SIMULATED)"),
-        ]
-
-        self.table.setRowCount(len(default_matches))
-        for row_idx, data in enumerate(default_matches):
-            for col_idx in range(7):
-                item = QTableWidgetItem(data[col_idx])
-                item.setFlags(item.flags() ^ Qt.ItemFlag.ItemIsEditable)
-                self.table.setItem(row_idx, col_idx, item)
-
     def perform_match(self):
         if not self.db_path:
+            self.table.setRowCount(0)
             return
 
         src_ch = self.src_combo.currentIndex() + 1
@@ -176,7 +160,7 @@ class SuspectJourneyViewWidget(QWidget):
         matches = cross_reference_reid(self.db_path, source_channel=src_ch, target_channel=tgt_ch, threshold=0.1)
 
         if not matches:
-            self.populate_default_journey_matches()
+            self.table.setRowCount(0)
             return
 
         self.table.setRowCount(len(matches))

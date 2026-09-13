@@ -21,7 +21,7 @@ class VideoTileWidget(QWidget):
     def __init__(self, parent: QWidget = None, channel_name: str = "CAM 01 - MAIN GATE"):
         super().__init__(parent)
         self.channel_name = channel_name
-        self.osd_text = f"{self.channel_name} | 2023-11-14 18:42:11.042 | 25.0 FPS | H.264 Main@L4.1"
+        self.osd_text = f"{self.channel_name}"
         self.bounding_boxes: List[Dict[str, Any]] = []
 
         self.layout = QVBoxLayout(self)

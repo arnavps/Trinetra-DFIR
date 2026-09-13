@@ -129,7 +129,6 @@ class SearchPanelWidget(QWidget):
         super().__init__(parent)
         self.db_path = db_path
         self.init_ui()
-        self.populate_default_triage_results()
 
     def init_ui(self):
         layout = QVBoxLayout(self)
@@ -212,23 +211,6 @@ class SearchPanelWidget(QWidget):
         self.db_path = db_path
         self.perform_search()
 
-    def populate_default_triage_results(self):
-        """Populates default triage detection metadata on startup with explicit (SIMULATED) labels."""
-        default_detections = [
-            ("2023-11-14 18:42:11.042", "Ch 1", "person (SIMULATED)", "0.88", "250", "[50, 40, 180, 280]", "HIK_CH1_0001", f"{INVESTIGATIVE_LEAD_LABEL} (SIMULATED)"),
-            ("2023-11-14 18:42:15.820", "Ch 2", "car (SIMULATED)", "0.91", "370", "[200, 100, 520, 310]", "HIK_CH2_0001", f"{INVESTIGATIVE_LEAD_LABEL} (SIMULATED)"),
-            ("2023-11-14 18:43:02.110", "Ch 1", "person (SIMULATED)", "0.89", "1420", "[120, 60, 210, 310]", "HIK_CH1_0001", f"{INVESTIGATIVE_LEAD_LABEL} (SIMULATED)"),
-            ("2023-11-14 18:44:19.450", "Ch 3", "vehicle (SIMULATED)", "0.95", "3340", "[80, 150, 440, 290]", "HIK_CH3_0001", f"{INVESTIGATIVE_LEAD_LABEL} (SIMULATED)"),
-            ("2023-11-14 18:45:00.000", "Ch 4", "face (SIMULATED)", "0.92", "4500", "[140, 90, 80, 80]", "HIK_CH4_0001", f"{INVESTIGATIVE_LEAD_LABEL} (SIMULATED)"),
-        ]
-
-        self.table.setRowCount(len(default_detections))
-        for row_idx, data in enumerate(default_detections):
-            for col_idx in range(8):
-                item = QTableWidgetItem(data[col_idx])
-                item.setFlags(item.flags() ^ Qt.ItemFlag.ItemIsEditable)
-                self.table.setItem(row_idx, col_idx, item)
-
     def perform_semantic_search(self):
         query = self.nl_input.text().strip()
         if not query or not self.db_path:
@@ -241,24 +223,25 @@ class SearchPanelWidget(QWidget):
         results = query_semantic_search(query, index_file, meta_file, top_k=10)
 
         if not results:
-            self.populate_default_triage_results()
+            self.table.setRowCount(0)
             return
 
         self.table.setRowCount(len(results))
         for row_idx, item in enumerate(results):
-            self.table.setItem(row_idx, 0, QTableWidgetItem(str(item.get("timestamp", "2023-11-14 18:42:11.042"))))
+            self.table.setItem(row_idx, 0, QTableWidgetItem(str(item.get("timestamp", ""))))
             self.table.setItem(row_idx, 1, QTableWidgetItem(f"Ch {item.get('channel_id', 1)}"))
             self.table.setItem(row_idx, 2, QTableWidgetItem("semantic_clip (SIMULATED)" if item.get("is_simulated", True) else "semantic_clip"))
-            sim_score = item.get("similarity_score", 0.91)
+            sim_score = item.get("similarity_score", 0.0)
             self.table.setItem(row_idx, 3, QTableWidgetItem(f"{sim_score:.3f}"))
             self.table.setItem(row_idx, 4, QTableWidgetItem("-"))
             self.table.setItem(row_idx, 5, QTableWidgetItem("-"))
-            self.table.setItem(row_idx, 6, QTableWidgetItem(str(item.get("file_id", "HIK_CH1_0001"))))
+            self.table.setItem(row_idx, 6, QTableWidgetItem(str(item.get("file_id", ""))))
             lbl = f"{INVESTIGATIVE_LEAD_LABEL} (SIMULATED)" if item.get("is_simulated", True) else INVESTIGATIVE_LEAD_LABEL
             self.table.setItem(row_idx, 7, QTableWidgetItem(lbl))
 
     def perform_search(self):
         if not self.db_path:
+            self.table.setRowCount(0)
             return
 
         class_val = self.class_combo.currentText()
@@ -276,7 +259,7 @@ class SearchPanelWidget(QWidget):
         )
 
         if not results:
-            self.populate_default_triage_results()
+            self.table.setRowCount(0)
             return
 
         self.table.setRowCount(len(results))

@@ -23,6 +23,8 @@ def generate_bsa_sec63_cert_draft(
     case_id = case_info.get("case_id", "UNKNOWN")
     investigator = case_info.get("investigator", "Unassigned")
     created_at = case_info.get("created_at", "")
+    sha256 = case_info.get("sha256") or case_info.get("image_hash") or "Not yet acquired"
+    md5 = case_info.get("md5", "Not yet acquired")
 
     part_a_text = f"""================================================================================
 BHARATIYA SAKSHYA ADHINIYAM (BSA 2023) — SECTION 63 CERTIFICATE (PART A DRAFT)
@@ -38,6 +40,8 @@ Date of Generation: {created_at}
 Acquisition Software: UniDVR-Forensics (v1.0.0, Offline Forensic Workstation)
 Write-Block Verification: Hardware/Software Write-Block Enforced (ReadOnlyHandle)
 Physical Sector Reader: Raw Block IO Crate (unidvr_rustcore::raw_io)
+Primary Bitstream Image SHA-256: {sha256}
+Primary Bitstream Image MD5: {md5}
 
 2. EVIDENTIARY MEDIA SUMMARY
 ----------------------------

@@ -23,16 +23,27 @@ def build_json_report(db_path: str, case_id: str) -> Dict[str, Any]:
     cursor.execute("SELECT timestamp, event_type, details, previous_hash, entry_hash FROM audit_log WHERE case_id = ? ORDER BY entry_id ASC", (case_id,))
     audit_rows = cursor.fetchall()
     
-    # Query detections summary
-    cursor.execute("SELECT count(*) as cnt FROM detections")
-    det_count = cursor.fetchone()["cnt"]
+    # Query detections summary and items
+    cursor.execute("SELECT detection_id, file_id, class_name, confidence, is_simulated FROM detections")
+    det_rows = cursor.fetchall()
+    det_items = [
+        {
+            "id": r["detection_id"],
+            "file_id": r["file_id"],
+            "class_name": r["class_name"],
+            "confidence": r["confidence"],
+            "is_simulated": bool(r["is_simulated"]),
+        }
+        for r in det_rows
+    ]
     conn.close()
 
     return {
         "case_id": case_id,
         "audit_chain_valid": chain_valid,
         "models_verification": models_status,
-        "detections_count": det_count,
+        "detections_count": len(det_items),
+        "detections": det_items,
         "extracted_files": [
             {
                 "file_id": f.file_id,
@@ -115,6 +126,31 @@ def generate_case_report_pdf(db_path: str, case_id: str, output_pdf_path: str) -
         st = m_info["status"]
         st_text = f"<font color='green'>VERIFIED</font>" if st == "VERIFIED" else f"<font color='red'>SIMULATED / NO MODEL LOADED ({st})</font>"
         story.append(Paragraph(f"• <b>{m_name}:</b> {st_text}", styles['Normal']))
+
+    # AI Findings Table
+    detections = report_data.get("detections", [])
+    if detections:
+        story.append(Spacer(1, 10))
+        story.append(Paragraph("<b>Recorded AI Detections & Verification Ledger:</b>", styles['Heading2']))
+        story.append(Spacer(1, 6))
+        det_table_data = [["Detection ID", "File ID", "Class", "Confidence", "Model Status"]]
+        for d in detections:
+            sim_tag = "<font color='red'>(SIMULATED)</font>" if d["is_simulated"] else "<font color='green'>(VERIFIED)</font>"
+            det_table_data.append([
+                d["id"],
+                d["file_id"],
+                d["class_name"],
+                f"{d['confidence']:.2f}",
+                sim_tag
+            ])
+        dt = Table(det_table_data, colWidths=[90, 110, 110, 80, 110])
+        dt.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#252526')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ]))
+        story.append(dt)
 
     story.append(Spacer(1, 14))
 

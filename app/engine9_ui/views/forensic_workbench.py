@@ -136,102 +136,33 @@ class ForensicWorkbenchView(QWidget):
 
         main_layout.addWidget(v_splitter)
 
-    def populate_synthetic_workbench(self, demo_video_path: Optional[str] = None) -> None:
-        """Populates 2x2 grid OSD, bounding boxes, and evidence table with realistic synthetic data."""
-        # Synchronized timestamps to 2023-11-14 session time
-        timestamp_str = "2023-11-14 18:42:11.042"
-
-        # Set AI bounding boxes on Tile 0 and Tile 1
-        self.tiles[0].set_bounding_boxes([
-            {"class_name": "person", "confidence": 0.94, "bbox": [50, 40, 180, 280]}
-        ])
-        self.tiles[0].set_osd_text(f"CAM 01 - MAIN GATE | {timestamp_str} | 25.0 FPS | H.264 Main@L4.1")
-
-        self.tiles[1].set_bounding_boxes([
-            {"class_name": "car", "confidence": 0.91, "bbox": [200, 100, 520, 310]}
-        ])
-        self.tiles[1].set_osd_text(f"CAM 02 - CASHIER COUNTER | {timestamp_str} | 25.0 FPS | H.264 Main@L4.1")
-
-        self.tiles[2].set_osd_text(f"CAM 03 - PARKING LOT | {timestamp_str} | 25.0 FPS | H.264 Main@L4.1")
-        self.tiles[3].set_osd_text(f"CAM 04 - VAULT ENTRANCE | {timestamp_str} | 25.0 FPS | H.264 Main@L4.1")
-
-        if demo_video_path and os.path.exists(demo_video_path):
-            self.tiles[0].load_file(demo_video_path)
-            self.tiles[1].load_file(demo_video_path)
-            self.tiles[2].load_file(demo_video_path)
-            self.tiles[3].load_file(demo_video_path)
-        else:
-            for tile in self.tiles:
-                tile._render_placeholder()
-
-        # Evidence Table Rows matching 2023-11-14 timestamp
-        evidence_rows = [
-            ("TRK-001", "CH1 - Main Gate", "ALLOCATED", "2023-11-14 18:00:00.000", "2023-11-14 18:30:00.000", "0x003A4F00", "7f83b165...a9c8", "TAMPER CHECK: PASS"),
-            ("TRK-002", "CH2 - Cashier", "ALLOCATED", "2023-11-14 18:00:00.000", "2023-11-14 18:45:00.000", "0x003B2A10", "a1b2c3d4...e5f6", "TAMPER CHECK: PASS"),
-            ("TRK-003", "CH1 - Main Gate", "CARVED (ORPHAN NAL)", "2023-11-14 18:30:05.120", "2023-11-14 18:38:12.450", "0x003C1000", "8e9f0a1b...c2d3", "TAMPER CHECK: PASS"),
-            ("TRK-004", "CH3 - Parking", "ALLOCATED", "2023-11-14 18:10:00.000", "2023-11-14 19:00:00.000", "0x003D4000", "3f4e5d6c...7b8a", "TAMPER CHECK: PASS"),
-            ("TRK-005", "CH4 - Vault", "CARVED (ORPHAN NAL)", "2023-11-14 18:32:00.000", "2023-11-14 18:48:00.000", "0x003E8000", "5a6b7c8d...9e0f", "TAMPER CHECK: PASS"),
-        ]
-
-        self.table.setRowCount(len(evidence_rows))
-        for row_idx, row_data in enumerate(evidence_rows):
-            for col_idx in range(8):
-                item = QTableWidgetItem(row_data[col_idx])
-                item.setFlags(item.flags() ^ Qt.ItemFlag.ItemIsEditable)
-
-                if col_idx == 2:  # Type Badge Column
-                    if "ALLOCATED" in row_data[2]:
-                        lbl = QLabel("ALLOCATED", self.table)
-                        lbl.setStyleSheet(get_badge_stylesheet(DFIR_DARK_THEME["status_emerald_bg"], DFIR_DARK_THEME["status_emerald_fg"]))
-                    else:
-                        lbl = QLabel("CARVED (ORPHAN NAL)", self.table)
-                        lbl.setStyleSheet(get_badge_stylesheet(DFIR_DARK_THEME["status_amber_bg"], DFIR_DARK_THEME["status_amber_fg"]))
-                    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    self.table.setCellWidget(row_idx, col_idx, lbl)
-                elif col_idx == 7:  # Tamper Status Column
-                    lbl = QLabel("TAMPER CHECK: PASS", self.table)
-                    lbl.setStyleSheet(get_badge_stylesheet(DFIR_DARK_THEME["status_cyan_bg"], DFIR_DARK_THEME["status_cyan_fg"]))
-                    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    self.table.setCellWidget(row_idx, col_idx, lbl)
-                else:
-                    self.table.setItem(row_idx, col_idx, item)
-
     def load_vfs(self, vfs: VirtualFileSystem, case_dir: str = "", is_demo: bool = False) -> None:
         """Loads actual VirtualFileSystem files into the evidence table & tiles."""
         if not vfs or not vfs.files:
+            self.table.setRowCount(0)
             return
 
-        demo_mp4 = None
-        if case_dir and os.path.exists(case_dir):
-            for f in os.listdir(case_dir):
-                if f.lower().endswith(".mp4"):
-                    demo_mp4 = os.path.join(case_dir, f)
-                    break
-
-        if is_demo:
-            self.populate_synthetic_workbench(demo_video_path=demo_mp4)
-        else:
-            codec_name = "H.265 Main@L4.1" if ("HFS" in getattr(vfs, "oem", "") or "HeimVision" in getattr(vfs, "oem", "")) else "H.264 Main@L4.1"
-            for idx in range(4):
-                if idx < len(vfs.files):
-                    f_entry = vfs.files[idx]
-                    ch_name = f"CAM {f_entry.channel_id:02d}"
-                    if idx < len(vfs.channels):
-                        ch_name = vfs.channels[idx].channel_name
-                    self.tiles[idx].channel_name = ch_name
-                    self.tiles[idx].set_osd_text(f"{ch_name} | {f_entry.start_timestamp} | 15.0 FPS | {codec_name}")
-                else:
-                    self.tiles[idx].channel_name = f"CAM {idx+1:02d} - NO SIGNAL"
-                    self.tiles[idx].set_osd_text(f"CAM {idx+1:02d} - NO SIGNAL | 0.0 FPS")
-                    self.tiles[idx]._render_placeholder()
+        codec_name = "H.265 Main@L4.1" if ("HFS" in getattr(vfs, "oem", "") or "HeimVision" in getattr(vfs, "oem", "")) else "H.264 Main@L4.1"
+        for idx in range(4):
+            if idx < len(vfs.files):
+                f_entry = vfs.files[idx]
+                ch_name = f"CAM {f_entry.channel_id:02d}"
+                if idx < len(vfs.channels):
+                    ch_name = vfs.channels[idx].channel_name
+                self.tiles[idx].channel_name = ch_name
+                self.tiles[idx].set_osd_text(f"{ch_name} | {f_entry.start_timestamp or ''} | 15.0 FPS | {codec_name}")
+            else:
+                self.tiles[idx].channel_name = f"CAM {idx+1:02d} - NO SIGNAL"
+                self.tiles[idx].set_osd_text(f"CAM {idx+1:02d} - NO SIGNAL")
+                self.tiles[idx]._render_placeholder()
 
         self.table.setRowCount(len(vfs.files))
         for row_idx, entry in enumerate(vfs.files):
             trk_id = f"TRK-{entry.file_id[-6:] if len(entry.file_id) >= 6 else entry.file_id}"
             ch_str = f"CH{entry.channel_id} - Channel {entry.channel_id}"
             ext_type = getattr(entry, "extraction_type", "ALLOCATED").upper()
-            start_ts = entry.start_timestamp or "2021-08-04 13:59:51.000"
-            end_ts = entry.end_timestamp or "2021-08-04 14:01:32.000"
+            start_ts = entry.start_timestamp or ""
+            end_ts = entry.end_timestamp or ""
             
             start_lba = "0x00000000"
             if getattr(entry, "cluster_runs", None) and len(entry.cluster_runs) > 0:

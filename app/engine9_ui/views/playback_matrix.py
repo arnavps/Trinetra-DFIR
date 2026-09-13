@@ -51,7 +51,7 @@ class PlaybackMatrixView(QWidget):
             col = idx % 4
             ch_name = channel_labels[idx]
             tile = VideoTileWidget(self, channel_name=ch_name)
-            tile.set_osd_text(f"{ch_name} | 2023-11-14 18:42:11.042 | 25.0 FPS | H.264")
+            tile.set_osd_text(f"{ch_name}")
             tile.setToolTip(f"Camera Channel {idx + 1}")
             self.tiles.append(tile)
             self.grid_layout.addWidget(tile, row, col)
@@ -84,7 +84,7 @@ class PlaybackMatrixView(QWidget):
         if 0 <= tile_index < len(self.tiles):
             res = self.tiles[tile_index].load_file(file_path)
             self.tiles[tile_index].set_osd_text(
-                f"CAM {tile_index + 1:02d} - {os.path.basename(file_path)} | 2023-11-14 18:42:11.042 | 25.0 FPS | H.264"
+                f"CAM {tile_index + 1:02d} - {os.path.basename(file_path)}"
             )
             return res
         return False
@@ -108,7 +108,7 @@ class PlaybackMatrixView(QWidget):
         for idx in range(8):
             ch_id = idx + 1
             ch_name = f"CAM {ch_id:02d} - CHANNEL {ch_id}"
-            start_ts = "2021-08-04 13:59:51" if is_h265 else "2023-11-14 18:42:11.042"
+            start_ts = ""
             if idx < len(vfs.channels):
                 ch_name = f"CAM {ch_id:02d} - {vfs.channels[idx].channel_name}"
                 if vfs.channels[idx].start_timestamp:
@@ -118,7 +118,8 @@ class PlaybackMatrixView(QWidget):
                     start_ts = vfs.files[idx].start_timestamp
 
             self.tiles[idx].channel_name = ch_name
-            self.tiles[idx].set_osd_text(f"{ch_name} | {start_ts} | {fps_val} | {codec_name}")
+            osd_label = f"{ch_name} | {start_ts} | {fps_val} | {codec_name}" if start_ts else f"{ch_name} | {fps_val} | {codec_name}"
+            self.tiles[idx].set_osd_text(osd_label)
 
             if mp4_files:
                 sample_file = mp4_files[idx % len(mp4_files)]

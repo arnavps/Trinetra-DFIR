@@ -195,23 +195,23 @@ class CaseDashboardView(QWidget):
         """
         self.lbl_drive_specs.setText(drive_specs_txt)
 
-    def load_vfs(self, vfs: VirtualFileSystem, case_id: str = "CASE: CR-2026-MH-4019", is_demo: bool = False) -> None:
+    def load_vfs(self, vfs: VirtualFileSystem, case_id: str = "", is_demo: bool = False) -> None:
         self.demo_badge.setVisible(is_demo)
         wb_status = "HARDWARE ACTIVE"
         self.info_label.setText(
-            f"Active Case: {case_id} | OEM Detected: {vfs.oem} 4.1 | Total Channels: {len(vfs.channels)} | Total Clips: {len(vfs.files)} | Write-Block: {wb_status}"
+            f"Active Case: {case_id or 'UNNAMED'} | OEM Detected: {vfs.oem} | Total Channels: {len(vfs.channels)} | Total Clips: {len(vfs.files)} | Write-Block: {wb_status}"
         )
         self.file_tree.clear()
 
         channel_nodes = {}
         for ch in vfs.channels:
-            ch_item = QTreeWidgetItem(self.file_tree, [ch.channel_name, ch.start_timestamp or "2023-11-14 18:00:00", ch.end_timestamp or "2023-11-14 18:45:00", f"{ch.total_files} clips"])
+            ch_item = QTreeWidgetItem(self.file_tree, [ch.channel_name, ch.start_timestamp or "", ch.end_timestamp or "", f"{ch.total_files} clips"])
             channel_nodes[ch.channel_id] = ch_item
 
         for entry in vfs.files:
             parent_item = channel_nodes.get(entry.channel_id, self.file_tree)
-            start_ts = entry.start_timestamp or "2023-11-14 18:00:00.000"
-            end_ts = entry.end_timestamp or "2023-11-14 18:30:00.000"
+            start_ts = entry.start_timestamp or ""
+            end_ts = entry.end_timestamp or ""
             QTreeWidgetItem(parent_item, [entry.file_id, start_ts, end_ts, f"{entry.size_bytes} bytes"])
 
         self.file_tree.expandAll()

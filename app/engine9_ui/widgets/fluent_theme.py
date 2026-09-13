@@ -15,6 +15,9 @@ DFIR_DARK_THEME = {
     "status_amber_fg": "#F0883E",
     "status_cyan_bg": "#0C2D48",
     "status_cyan_fg": "#38BDF8",
+    "bg_dark": "#0D1117",
+    "panel_bg": "#161B22",
+    "text_normal": "#C9D1D9",
     "font_main": "'Segoe UI', -apple-system, sans-serif",
     "font_mono": "'Consolas', 'JetBrains Mono', 'Courier New', monospace",
 }

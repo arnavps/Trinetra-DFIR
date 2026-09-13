@@ -55,12 +55,16 @@ def compute_hashes_python(filepath: str, chunk_size: int = 4 * 1024 * 1024):
     return md5.hexdigest(), sha256.hexdigest(), merkle_root, total_bytes
 
 
+from typing import Optional, Callable
+
+
 def acquire_image(
     source_path: str,
     dest_path: str,
     case_id: str,
     db_path: str = "case.db",
     enforce_write_block: bool = False,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> AcquisitionResult:
     import os
 
@@ -90,7 +94,10 @@ def acquire_image(
 
     # 3. Write .dd raw image (if destination differs from source)
     if os.path.abspath(source_path) != os.path.abspath(dest_path):
-        write_dd_image(source_path, dest_path)
+        write_dd_image(source_path, dest_path, progress_callback=progress_callback)
+    elif progress_callback and os.path.exists(dest_path):
+        file_sz = os.path.getsize(dest_path)
+        progress_callback(file_sz, file_sz)
 
     # 4. Compute hashes via Rust core if available, or Python fallback
     try:

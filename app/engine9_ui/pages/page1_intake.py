@@ -3,6 +3,7 @@ The only entry point into the application. Nothing else is reachable until this 
 """
 
 import os
+import stat
 import subprocess
 import sys
 from typing import Optional, List, Dict, Callable
@@ -201,6 +202,19 @@ class Page1Intake(QWidget):
         """)
         self.btn_verify_wb.clicked.connect(self._on_verify_wb_clicked)
         wb_btn_h.addWidget(self.btn_verify_wb)
+
+        self.btn_lock_wb = QPushButton("Lock Image as Read-Only (Software Write-Lock)", self)
+        self.btn_lock_wb.setStyleSheet(f"""
+            background-color: #21262D;
+            border: 1px solid {DFIR_DARK_THEME['border_color']};
+            color: #58A6FF;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 4px;
+        """)
+        self.btn_lock_wb.clicked.connect(self._on_lock_wb_clicked)
+        wb_btn_h.addWidget(self.btn_lock_wb)
+
         wb_btn_h.addStretch()
         wb_layout.addLayout(wb_btn_h)
 
@@ -353,6 +367,24 @@ class Page1Intake(QWidget):
             if " — " in current_text:
                 return current_text.split(" — ")[0].strip()
             return current_text.strip()
+
+    def _on_lock_wb_clicked(self):
+        source = self._get_current_source_path()
+        if not source or not os.path.exists(source):
+            QMessageBox.warning(self, "Invalid Source", "Please select an existing evidence image or file path.")
+            return
+        if not os.path.isfile(source):
+            QMessageBox.information(
+                self,
+                "Physical Block Device",
+                "Software read-only locking applies to disk image files (.dd, .E01, .E03). For physical drives, connect via a hardware write-blocker."
+            )
+            return
+        try:
+            os.chmod(source, stat.S_IREAD)
+            self._on_verify_wb_clicked()
+        except Exception as e:
+            QMessageBox.critical(self, "Lock Error", f"Failed to apply read-only lock attribute:\n\n{e}")
 
     def _on_verify_wb_clicked(self):
         source = self._get_current_source_path()

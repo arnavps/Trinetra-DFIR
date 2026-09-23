@@ -10,7 +10,7 @@ import hashlib
 import os
 from typing import Dict, Any
 
-from app.engine5_playback.remuxer import remux_to_mp4
+from app.engine5_playback.remuxer import remux_to_mp4, remux_with_redaction
 from app.engine7_case_db.audit_log import log_event
 
 
@@ -64,4 +64,53 @@ def export_derivative_clip(
         "export_hash": export_hash,
         "size_bytes": file_size,
         "label": CONVENIENCE_COPY_LABEL,
+    }
+
+
+def export_redacted_clip(
+    db_path: str,
+    case_id: str,
+    input_raw_path: str,
+    output_export_path: str,
+    redaction_boxes: list,
+    is_simulated_warning: bool = False,
+) -> Dict[str, Any]:
+    """
+    Executes investigator-triggered redacted export with blurred/pixelated bounding boxes.
+    Applies only to derivative non-evidentiary export copy, never primary evidence.
+    Logs a distinct 'EXPORT_REDACTED' audit event.
+    """
+    if not os.path.exists(input_raw_path):
+        raise FileNotFoundError(f"Input stream file not found: {input_raw_path}")
+
+    # Remux stream with blur redaction via remuxer.py
+    remux_with_redaction(input_raw_path, output_export_path, redaction_boxes)
+
+    # Compute independent hash for derivative redacted file
+    export_hash = compute_file_sha256(output_export_path)
+    file_size = os.path.getsize(output_export_path)
+
+    # Log distinct audit event type for redaction
+    log_event(
+        db_path=db_path,
+        case_id=case_id,
+        event_type="EXPORT_REDACTED",
+        details={
+            "output_path": output_export_path,
+            "export_hash": export_hash,
+            "size_bytes": file_size,
+            "box_count": len(redaction_boxes),
+            "simulated_warning": is_simulated_warning,
+            "label": CONVENIENCE_COPY_LABEL,
+            "notice": "Derivative redacted export created. Non-evidentiary convenience copy.",
+        },
+    )
+
+    return {
+        "export_path": output_export_path,
+        "export_hash": export_hash,
+        "size_bytes": file_size,
+        "label": CONVENIENCE_COPY_LABEL,
+        "redaction_applied": True,
+        "box_count": len(redaction_boxes),
     }

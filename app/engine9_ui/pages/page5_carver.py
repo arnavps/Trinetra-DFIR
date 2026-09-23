@@ -14,69 +14,10 @@ from PySide6.QtWidgets import (
 from app.engine9_ui.case_session import CaseSession
 from app.engine9_ui.widgets.empty_state import EmptyStateWidget
 from app.engine9_ui.widgets.fluent_theme import DFIR_DARK_THEME
-from app.engine1_acquisition.image_reader import ImageReader
 from app.engine4_carver.frame_carver import carve_nal_units
 from app.engine4_carver.gop_reconstructor import reassemble_gop_fragments
 from app.engine3_parsers.fs_base import ExtractedFileEntry, ClusterRun
-
-
-class CarvingWorker(QThread):
-    """Carves raw NAL units in background chunk by chunk."""
-    progress_signal = Signal(int, int)  # processed_bytes, total_bytes
-    finished_signal = Signal(list)      # List[ExtractedFileEntry]
-    error_signal = Signal(str)
-
-    def __init__(self, image_path: str, case_id: str):
-        super().__init__()
-        self.image_path = image_path
-        self.case_id = case_id
-        self._is_cancelled = False
-
-    def cancel(self):
-        self._is_cancelled = True
-
-    def run(self):
-        try:
-            with ImageReader(self.image_path) as reader:
-                total_size = reader.size()
-                # Scan unallocated space in 16MB blocks up to 64MB or file end
-                scan_limit = min(total_size, 64 * 1024 * 1024)
-                chunk_size = 8 * 1024 * 1024
-                offset = 0
-
-                fragments_found: List[ExtractedFileEntry] = []
-                frag_idx = 1
-
-                while offset < scan_limit and not self._is_cancelled:
-                    read_len = min(chunk_size, scan_limit - offset)
-                    reader.seek(offset)
-                    data = reader.read(read_len)
-
-                    nal_units = carve_nal_units(data, start_offset=0, max_bytes=read_len)
-                    if nal_units:
-                        gops = reassemble_gop_fragments(nal_units)
-                        for gop in gops:
-                            if len(gop) > 1024:  # Meaningful GOP length
-                                start_sec = offset // 512
-                                sec_cnt = (len(gop) + 511) // 512
-                                entry = ExtractedFileEntry(
-                                    file_id=f"CARVED_FRAG_{frag_idx:04d}",
-                                    channel_id=0,  # 0 indicates unallocated orphan
-                                    start_timestamp="Carved Stream",
-                                    end_timestamp="Heuristic Recovery",
-                                    size_bytes=len(gop),
-                                    cluster_runs=[ClusterRun(start_sector=start_sec, sector_count=sec_cnt)],
-                                    extraction_type="carved_fragment",
-                                )
-                                fragments_found.append(entry)
-                                frag_idx += 1
-
-                    offset += read_len
-                    self.progress_signal.emit(offset, scan_limit)
-
-                self.finished_signal.emit(fragments_found)
-        except Exception as e:
-            self.error_signal.emit(str(e))
+from app.engine9_ui.job_manager import JobManager, ForensicJob
 
 
 class Page5Carver(QWidget):
@@ -89,7 +30,7 @@ class Page5Carver(QWidget):
     def __init__(self, session: CaseSession, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.session = session
-        self.worker: Optional[CarvingWorker] = None
+        self.active_job: Optional[ForensicJob] = None
         self.has_scanned = False
         self.init_ui()
 
@@ -261,23 +202,67 @@ class Page5Carver(QWidget):
         self.progress_bar.setValue(0)
         self.lbl_scan_status.setText("Scanning sectors for NAL headers...")
 
-        self.worker = CarvingWorker(self.session.image_path, self.session.case_id or "CASE")
-        self.worker.progress_signal.connect(self._on_progress)
-        self.worker.finished_signal.connect(self._on_finished)
-        self.worker.error_signal.connect(self._on_error)
-        self.worker.start()
+        def _carve_task(progress_callback=None, is_cancelled=None):
+            reader = self.session.get_image_reader()
+            if not reader:
+                raise RuntimeError("Cannot open evidence image.")
+
+            total_size = reader.size()
+            scan_limit = min(total_size, 64 * 1024 * 1024)
+            chunk_size = 8 * 1024 * 1024
+            offset = 0
+
+            fragments_found: List[ExtractedFileEntry] = []
+            frag_idx = 1
+
+            while offset < scan_limit and (is_cancelled is None or not is_cancelled()):
+                read_len = min(chunk_size, scan_limit - offset)
+                reader.seek(offset)
+                data = reader.read(read_len)
+
+                nal_units = carve_nal_units(data, start_offset=0, max_bytes=read_len)
+                if nal_units:
+                    gops = reassemble_gop_fragments(nal_units)
+                    for gop in gops:
+                        if len(gop) > 1024:
+                            start_sec = offset // 512
+                            sec_cnt = (len(gop) + 511) // 512
+                            entry = ExtractedFileEntry(
+                                file_id=f"CARVED_FRAG_{frag_idx:04d}",
+                                channel_id=0,
+                                start_timestamp="Carved Stream",
+                                end_timestamp="Heuristic Recovery",
+                                size_bytes=len(gop),
+                                cluster_runs=[ClusterRun(start_sector=start_sec, sector_count=sec_cnt)],
+                                extraction_type="carved_fragment",
+                            )
+                            fragments_found.append(entry)
+                            frag_idx += 1
+
+                offset += read_len
+                if progress_callback:
+                    pct = int((offset / scan_limit) * 100) if scan_limit > 0 else 0
+                    progress_callback(pct, f"Scanned {offset / (1024*1024):.1f} MB / {scan_limit / (1024*1024):.1f} MB ({pct}%)")
+
+            return fragments_found
+
+        def _on_job_progress(pct: int, msg: str):
+            self.progress_bar.setValue(pct)
+            self.lbl_scan_status.setText(msg)
+
+        self.active_job = JobManager.instance().submit_job(
+            job_type="CARVER_SCAN",
+            description=f"Carve NAL Units ({os.path.basename(self.session.image_path)})",
+            task_fn=_carve_task,
+            on_success=self._on_finished,
+            on_error=self._on_error,
+            on_progress=_on_job_progress,
+        )
 
     def _cancel_carving(self):
-        if self.worker:
-            self.worker.cancel()
+        if self.active_job:
+            self.active_job.cancel()
             self.lbl_scan_status.setText("Cancelling scan...")
-
-    def _on_progress(self, done: int, total: int):
-        pct = int((done / total) * 100) if total > 0 else 0
-        self.progress_bar.setValue(pct)
-        mb_done = done / (1024 * 1024)
-        mb_total = total / (1024 * 1024)
-        self.lbl_scan_status.setText(f"Scanned {mb_done:.1f} MB / {mb_total:.1f} MB ({pct}%)")
 
     def _on_finished(self, fragments: List[ExtractedFileEntry]):
         self.has_scanned = True

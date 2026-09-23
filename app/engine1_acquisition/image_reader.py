@@ -72,6 +72,10 @@ def find_split_segments(input_path: str) -> List[str]:
     return [p for _, p in valid_segments]
 
 
+from collections import OrderedDict
+from typing import Dict, List, Optional, BinaryIO
+
+
 class EWFChunkDescriptor:
     __slots__ = ("offset", "length", "is_compressed", "file_path")
 
@@ -83,38 +87,47 @@ class EWFChunkDescriptor:
 
 
 def parse_ewf_chunks(segment_paths: List[str]) -> List[EWFChunkDescriptor]:
-    """Parses EWF section headers and chunk tables across segment files."""
+    """
+    Parses EWF section headers and chunk tables across segment files without loading
+    full segments into RAM. Seeks sequentially across the next_offset chain.
+    """
     chunks = []
     for seg_path in segment_paths:
+        if not os.path.exists(seg_path):
+            continue
+        seg_size = os.path.getsize(seg_path)
         with open(seg_path, "rb") as f:
-            buf = f.read()
+            pos = 13
+            while pos < seg_size - 76:
+                f.seek(pos)
+                header_data = f.read(24)
+                if len(header_data) < 24:
+                    break
 
-        pos = 13
-        while pos < len(buf) - 76:
-            sec_name = buf[pos : pos + 16].rstrip(b"\x00").decode("latin1", errors="ignore")
-            next_offset = struct.unpack("<Q", buf[pos + 16 : pos + 24])[0]
+                sec_name = header_data[:16].rstrip(b"\x00").decode("latin1", errors="ignore")
+                next_offset = struct.unpack("<Q", header_data[16:24])[0]
 
-            if sec_name == "table":
-                num_chunks = struct.unpack("<I", buf[pos + 76 : pos + 80])[0]
-                offsets_start = pos + 76 + 24
+                if sec_name == "table":
+                    f.seek(pos + 76)
+                    table_hdr = f.read(4)
+                    if len(table_hdr) == 4:
+                        num_chunks = struct.unpack("<I", table_hdr)[0]
+                        f.seek(pos + 76 + 24)
+                        entries_raw = f.read(num_chunks * 4)
+                        if len(entries_raw) == num_chunks * 4:
+                            chunk_offsets = struct.unpack(f"<{num_chunks}I", entries_raw)
+                            for i in range(len(chunk_offsets) - 1):
+                                entry = chunk_offsets[i]
+                                is_comp = bool(entry & 0x80000000)
+                                off0 = entry & 0x7FFFFFFF
+                                off1 = chunk_offsets[i + 1] & 0x7FFFFFFF
+                                clen = off1 - off0
+                                chunks.append(EWFChunkDescriptor(off0, clen, is_comp, seg_path))
 
-                chunk_offsets = []
-                for i in range(num_chunks):
-                    entry = struct.unpack("<I", buf[offsets_start + i * 4 : offsets_start + (i + 1) * 4])[0]
-                    chunk_offsets.append(entry)
-
-                for i in range(len(chunk_offsets) - 1):
-                    entry = chunk_offsets[i]
-                    is_comp = bool(entry & 0x80000000)
-                    off0 = entry & 0x7FFFFFFF
-                    off1 = chunk_offsets[i + 1] & 0x7FFFFFFF
-                    clen = off1 - off0
-                    chunks.append(EWFChunkDescriptor(off0, clen, is_comp, seg_path))
-
-            if next_offset > pos and next_offset < len(buf):
-                pos = next_offset
-            else:
-                break
+                if next_offset > pos and next_offset < seg_size:
+                    pos = next_offset
+                else:
+                    break
     return chunks
 
 
@@ -122,6 +135,7 @@ class ImageReader:
     """
     Unified file-like reader providing read, seek, tell across single (.dd, .raw)
     or split EWF (.E01, .E02, .E03, .eo3) evidence segment files with on-the-fly zlib decompression.
+    Maintains persistent segment file handles and OrderedDict-based LRU chunk caching.
     """
 
     def __init__(self, first_segment_path: str):
@@ -133,7 +147,8 @@ class ImageReader:
         self.current_offset = 0
         self._is_ewf = False
         self.ewf_chunks: List[EWFChunkDescriptor] = []
-        self._chunk_cache: Dict[int, bytes] = {}
+        self._chunk_cache: OrderedDict[int, bytes] = OrderedDict()
+        self._file_handles: Dict[str, BinaryIO] = {}
 
         # Check EWF Header Magic in the primary segment (chunk 1)
         if self.segments:
@@ -153,6 +168,12 @@ class ImageReader:
             self.segment_sizes = [os.path.getsize(p) for p in self.segments]
             self.total_size = sum(self.segment_sizes)
 
+    def _get_file_handle(self, file_path: str) -> BinaryIO:
+        """Returns or opens a persistent file handle for the specified segment path."""
+        if file_path not in self._file_handles or self._file_handles[file_path].closed:
+            self._file_handles[file_path] = open(file_path, "rb")
+        return self._file_handles[file_path]
+
     @property
     def is_ewf(self) -> bool:
         return self._is_ewf
@@ -166,6 +187,7 @@ class ImageReader:
 
     def _read_ewf_chunk(self, chunk_idx: int) -> bytes:
         if chunk_idx in self._chunk_cache:
+            self._chunk_cache.move_to_end(chunk_idx)
             return self._chunk_cache[chunk_idx]
 
         if chunk_idx < 0 or chunk_idx >= len(self.ewf_chunks):
@@ -175,9 +197,9 @@ class ImageReader:
         if info.length == 52 or info.length == 0:
             decomp = b"\x00" * 32768
         else:
-            with open(info.file_path, "rb") as f:
-                f.seek(info.offset)
-                chunk_bytes = f.read(info.length)
+            f = self._get_file_handle(info.file_path)
+            f.seek(info.offset)
+            chunk_bytes = f.read(info.length)
             if info.is_compressed:
                 try:
                     decomp = zlib.decompress(chunk_bytes)
@@ -189,8 +211,9 @@ class ImageReader:
             if len(decomp) < 32768:
                 decomp = decomp + b"\x00" * (32768 - len(decomp))
 
-        if len(self._chunk_cache) > 256:
-            self._chunk_cache.clear()
+        # True LRU eviction when cache exceeds 256 chunks
+        if len(self._chunk_cache) >= 256:
+            self._chunk_cache.popitem(last=False)
         self._chunk_cache[chunk_idx] = decomp
         return decomp
 
@@ -218,7 +241,7 @@ class ImageReader:
             return b""
 
         if not self._is_ewf or not self.ewf_chunks:
-            # Raw file stream reading
+            # Raw file stream reading using persistent file handles
             bytes_to_read = size
             buffer = bytearray()
             target_offset = self.current_offset
@@ -235,10 +258,10 @@ class ImageReader:
                 seg_avail = self.segment_sizes[seg_idx] - seg_offset
 
                 read_chunk_len = min(bytes_to_read, seg_avail)
-                with open(seg_path, "rb") as f:
-                    f.seek(seg_offset)
-                    chunk = f.read(read_chunk_len)
-                    buffer.extend(chunk)
+                f = self._get_file_handle(seg_path)
+                f.seek(seg_offset)
+                chunk = f.read(read_chunk_len)
+                buffer.extend(chunk)
 
                 bytes_to_read -= len(chunk)
                 target_offset += len(chunk)
@@ -274,6 +297,12 @@ class ImageReader:
 
     def close(self) -> None:
         self._chunk_cache.clear()
+        for fh in list(self._file_handles.values()):
+            try:
+                fh.close()
+            except Exception:
+                pass
+        self._file_handles.clear()
 
     def __enter__(self):
         return self

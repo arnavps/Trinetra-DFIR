@@ -13,7 +13,6 @@ from PySide6.QtWidgets import (
 from app.engine9_ui.case_session import CaseSession
 from app.engine9_ui.widgets.empty_state import EmptyStateWidget
 from app.engine9_ui.widgets.fluent_theme import DFIR_DARK_THEME
-from app.engine1_acquisition.image_reader import ImageReader
 from app.engine5_playback.decoder import StreamDecoder
 from app.engine6_timeline.normalizer import TimelineNormalizer
 from app.engine6_timeline.osd_extractor import extract_osd_timestamp
@@ -147,17 +146,20 @@ class Page7Timeline(QWidget):
         if not entry or not self.session.has_evidence:
             return
 
-        # Decode sample frames from stream
+        # Decode sample frames from stream via shared session reader
         try:
-            with ImageReader(self.session.image_path) as reader:
-                if entry.cluster_runs:
-                    start_sec = entry.cluster_runs[0].start_sector
-                    sec_cnt = entry.cluster_runs[0].sector_count
-                    reader.seek(start_sec * 512)
-                    stream_bytes = reader.read(sec_cnt * 512)
-                else:
-                    reader.seek(0)
-                    stream_bytes = reader.read(min(entry.size_bytes, 2 * 1024 * 1024))
+            reader = self.session.get_image_reader()
+            if not reader:
+                return
+
+            if entry.cluster_runs:
+                start_sec = entry.cluster_runs[0].start_sector
+                sec_cnt = entry.cluster_runs[0].sector_count
+                reader.seek(start_sec * 512)
+                stream_bytes = reader.read(sec_cnt * 512)
+            else:
+                reader.seek(0)
+                stream_bytes = reader.read(min(entry.size_bytes, 2 * 1024 * 1024))
 
             decoder = StreamDecoder(stream_bytes, max_frames=40)
             frames = [decoder.read_frame(i) for i in range(decoder.get_frame_count())]

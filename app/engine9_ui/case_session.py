@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Any
 from PySide6.QtCore import QObject, Signal
 
 from app.engine1_acquisition.acquirer import AcquisitionResult
+from app.engine1_acquisition.image_reader import ImageReader
 from app.engine2_detector.signature_matcher import MatchResult
 from app.engine3_parsers.fs_base import VirtualFileSystem, ExtractedFileEntry
 from app.engine7_case_db.db import init_db
@@ -41,6 +42,7 @@ class CaseSession(QObject):
         self.db_path: Optional[str] = None
         self.evidence_source: Optional[str] = None
         self.image_path: Optional[str] = None
+        self.shared_image_reader: Optional[ImageReader] = None
         self.write_block_verified: Optional[bool] = None
         self.acquisition_result: Optional[AcquisitionResult] = None
         self.oem_match_result: Optional[MatchResult] = None
@@ -61,6 +63,29 @@ class CaseSession(QObject):
     @property
     def has_vfs(self) -> bool:
         return self.virtual_file_system is not None
+
+    def get_image_reader(self) -> Optional[ImageReader]:
+        """
+        Returns the shared ImageReader for the active evidence image.
+        Constructs it once if image_path exists and is not yet opened.
+        """
+        if self.shared_image_reader is not None:
+            return self.shared_image_reader
+
+        if self.image_path and os.path.exists(self.image_path):
+            self.shared_image_reader = ImageReader(self.image_path)
+            return self.shared_image_reader
+
+        return None
+
+    def close_image_reader(self) -> None:
+        """Closes and cleans up the active shared ImageReader."""
+        if self.shared_image_reader is not None:
+            try:
+                self.shared_image_reader.close()
+            except Exception:
+                pass
+            self.shared_image_reader = None
 
     def create_case(
         self,
@@ -131,6 +156,7 @@ class CaseSession(QObject):
 
     def set_acquisition_result(self, result: AcquisitionResult) -> None:
         """Records acquisition result including SHA-256 and Merkle root."""
+        self.close_image_reader()
         self.acquisition_result = result
         self.image_path = result.path
         self.log_engine_event(
@@ -258,4 +284,5 @@ class CaseSession(QObject):
         self.timeline_normalization = None
         self.active_file_entry = None
         self.events_log = []
+        self.close_image_reader()
         self.case_changed.emit()

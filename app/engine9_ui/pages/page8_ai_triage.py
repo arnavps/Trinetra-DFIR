@@ -14,14 +14,14 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QTabWidget,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
-    QLineEdit, QGroupBox, QMessageBox, QFrame
+    QLineEdit, QGroupBox, QMessageBox, QFrame, QInputDialog
 )
 
 from app.engine9_ui.case_session import CaseSession
 from app.engine9_ui.widgets.empty_state import EmptyStateWidget
 from app.engine9_ui.widgets.fluent_theme import DFIR_DARK_THEME
-from app.engine1_acquisition.image_reader import ImageReader
 from app.engine5_playback.decoder import StreamDecoder
+from app.engine7_case_db.bookmarks import add_bookmark
 
 from app.engine8_ai.model_registry import verify_all_models
 from app.engine8_ai.detector import YOLOv8Detector
@@ -159,24 +159,86 @@ class Page8AiTriage(QWidget):
             self.lbl_models_summary.setText("Model status check unavailable (manifest error).")
 
     def _get_active_frames(self, max_frames: int = 30) -> List[np.ndarray]:
-        """Helper to extract real frames from the active clip stream."""
+        """Helper to extract real frames from the active clip stream via shared session reader."""
         entry = self.session.active_file_entry
         if not entry or not self.session.has_evidence:
             return []
 
-        with ImageReader(self.session.image_path) as reader:
-            if entry.cluster_runs:
-                start_sec = entry.cluster_runs[0].start_sector
-                sec_cnt = entry.cluster_runs[0].sector_count
-                reader.seek(start_sec * 512)
-                stream_bytes = reader.read(sec_cnt * 512)
-            else:
-                reader.seek(0)
-                stream_bytes = reader.read(min(entry.size_bytes, 2 * 1024 * 1024))
+        reader = self.session.get_image_reader()
+        if not reader:
+            return []
+
+        if entry.cluster_runs:
+            start_sec = entry.cluster_runs[0].start_sector
+            sec_cnt = entry.cluster_runs[0].sector_count
+            reader.seek(start_sec * 512)
+            stream_bytes = reader.read(sec_cnt * 512)
+        else:
+            reader.seek(0)
+            stream_bytes = reader.read(min(entry.size_bytes, 2 * 1024 * 1024))
 
         oem_desc = self.session.virtual_file_system.oem if self.session.virtual_file_system else "auto"
         decoder = StreamDecoder(stream_bytes, oem=oem_desc, max_frames=max_frames)
         return [decoder.read_frame(i) for i in range(decoder.get_frame_count()) if decoder.read_frame(i) is not None]
+
+    def _bookmark_selected_finding(self, table: QTableWidget, category: str):
+        """Allows investigator to bookmark any selected AI finding card/row with mandatory note."""
+        if not self.session.has_case:
+            QMessageBox.warning(self, "No Case", "An active case is required to save bookmarks.")
+            return
+
+        row = table.currentRow()
+        if row < 0:
+            QMessageBox.warning(self, "No Selection", f"Please select a {category} finding row first to bookmark.")
+            return
+
+        col0_text = table.item(row, 0).text() if table.item(row, 0) else f"Row_{row}"
+        col1_text = table.item(row, 1).text() if table.item(row, 1) else ""
+        fid = self.session.active_file_entry.file_id if self.session.active_file_entry else "CLIP"
+        ref_str = f"AI_{category}:{fid}:{col0_text}:{col1_text}".strip(":")
+
+        note, ok = QInputDialog.getText(
+            self,
+            "Bookmark AI Finding",
+            f"Enter mandatory investigator finding / observation note for {ref_str}:",
+        )
+        if not ok:
+            return
+
+        note = note.strip()
+        if not note:
+            QMessageBox.warning(self, "Note Required", "Investigator note is mandatory before saving a bookmark.")
+            return
+
+        try:
+            investigator = self.session.investigator_name or "Investigator"
+            bookmark = add_bookmark(
+                db_path=self.session.db_path,
+                case_id=self.session.case_id,
+                reference=ref_str,
+                note=note,
+                created_by=investigator,
+            )
+            self.session.log_engine_event(
+                event_type="BOOKMARK_ADDED",
+                message=f"Bookmark added for {ref_str}: '{note}'",
+                details={
+                    "bookmark_id": bookmark.id,
+                    "reference": ref_str,
+                    "note": note,
+                    "created_by": investigator,
+                },
+            )
+            QMessageBox.information(
+                self,
+                "Bookmark Saved",
+                f"AI finding successfully bookmarked:\n\n"
+                f"Reference: {ref_str}\n"
+                f"Investigator Note: {note}\n\n"
+                f"Recorded in Investigator Findings on Page 10 Report and Case Timeline (Page 11)."
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Bookmark Error", f"Failed to save bookmark:\n{e}")
 
     # --- TAB 1: DETECTION ---
     def _create_detection_tab(self) -> QWidget:
@@ -190,6 +252,11 @@ class Page8AiTriage(QWidget):
         self.btn_run_det.setStyleSheet("background-color: #238636; color: #FFF; font-weight: bold; padding: 6px 14px; border-radius: 4px;")
         self.btn_run_det.clicked.connect(self._run_detection)
         h_ctrl.addWidget(self.btn_run_det)
+
+        self.btn_bm_det = QPushButton("🔖 Bookmark Finding", w)
+        self.btn_bm_det.setStyleSheet("background-color: #D29922; color: #0D1117; font-weight: bold; padding: 6px 14px; border-radius: 4px;")
+        self.btn_bm_det.clicked.connect(lambda: self._bookmark_selected_finding(self.table_det, "OBJECT_DETECT"))
+        h_ctrl.addWidget(self.btn_bm_det)
 
         self.lbl_det_status = QLabel("No detection run yet on this evidence.", w)
         self.lbl_det_status.setStyleSheet("color: #8B949E; font-size: 11px;")
@@ -292,6 +359,11 @@ class Page8AiTriage(QWidget):
         self.btn_run_faces.clicked.connect(self._run_faces)
         h_ctrl.addWidget(self.btn_run_faces)
 
+        self.btn_bm_faces = QPushButton("🔖 Bookmark Finding", w)
+        self.btn_bm_faces.setStyleSheet("background-color: #D29922; color: #0D1117; font-weight: bold; padding: 6px 14px; border-radius: 4px;")
+        self.btn_bm_faces.clicked.connect(lambda: self._bookmark_selected_finding(self.table_faces, "FACE_DETECT"))
+        h_ctrl.addWidget(self.btn_bm_faces)
+
         self.lbl_face_status = QLabel("No face scan run yet on this evidence.", w)
         self.lbl_face_status.setStyleSheet("color: #8B949E; font-size: 11px;")
         h_ctrl.addWidget(self.lbl_face_status)
@@ -364,6 +436,11 @@ class Page8AiTriage(QWidget):
         self.btn_run_reid.clicked.connect(self._run_reid)
         h_ctrl.addWidget(self.btn_run_reid)
 
+        self.btn_bm_reid = QPushButton("🔖 Bookmark Match", w)
+        self.btn_bm_reid.setStyleSheet("background-color: #D29922; color: #0D1117; font-weight: bold; padding: 6px 14px; border-radius: 4px;")
+        self.btn_bm_reid.clicked.connect(lambda: self._bookmark_selected_finding(self.table_reid, "REID_MATCH"))
+        h_ctrl.addWidget(self.btn_bm_reid)
+
         self.lbl_reid_status = QLabel("No Re-ID search run yet on this evidence.", w)
         self.lbl_reid_status.setStyleSheet("color: #8B949E; font-size: 11px;")
         h_ctrl.addWidget(self.lbl_reid_status)
@@ -418,6 +495,11 @@ class Page8AiTriage(QWidget):
         self.btn_run_anpr.setStyleSheet("background-color: #238636; color: #FFF; font-weight: bold; padding: 6px 14px; border-radius: 4px;")
         self.btn_run_anpr.clicked.connect(self._run_anpr)
         h_ctrl.addWidget(self.btn_run_anpr)
+
+        self.btn_bm_anpr = QPushButton("🔖 Bookmark Plate", w)
+        self.btn_bm_anpr.setStyleSheet("background-color: #D29922; color: #0D1117; font-weight: bold; padding: 6px 14px; border-radius: 4px;")
+        self.btn_bm_anpr.clicked.connect(lambda: self._bookmark_selected_finding(self.table_anpr, "ANPR_PLATE"))
+        h_ctrl.addWidget(self.btn_bm_anpr)
 
         self.lbl_anpr_status = QLabel("No plate recognition run yet on this evidence.", w)
         self.lbl_anpr_status.setStyleSheet("color: #8B949E; font-size: 11px;")
@@ -496,6 +578,12 @@ class Page8AiTriage(QWidget):
         self.btn_search.setStyleSheet("background-color: #238636; color: #FFF; font-weight: bold; padding: 6px 14px; border-radius: 4px;")
         self.btn_search.clicked.connect(self._run_search)
         h_ctrl.addWidget(self.btn_search, stretch=1)
+
+        self.btn_bm_search = QPushButton("🔖 Bookmark Search Match", w)
+        self.btn_bm_search.setStyleSheet("background-color: #D29922; color: #0D1117; font-weight: bold; padding: 6px 14px; border-radius: 4px;")
+        self.btn_bm_search.clicked.connect(lambda: self._bookmark_selected_finding(self.table_search, "SEARCH_MATCH"))
+        h_ctrl.addWidget(self.btn_bm_search)
+
         v.addLayout(h_ctrl)
 
         self.lbl_search_status = QLabel("No semantic search run yet on this evidence.", w)
@@ -550,6 +638,11 @@ class Page8AiTriage(QWidget):
         self.btn_enhance.setStyleSheet("background-color: #238636; color: #FFF; font-weight: bold; padding: 6px 14px; border-radius: 4px;")
         self.btn_enhance.clicked.connect(self._run_enhance)
         h_ctrl.addWidget(self.btn_enhance)
+
+        self.btn_bm_enh = QPushButton("🔖 Bookmark Enhanced Finding", w)
+        self.btn_bm_enh.setStyleSheet("background-color: #D29922; color: #0D1117; font-weight: bold; padding: 6px 14px; border-radius: 4px;")
+        self.btn_bm_enh.clicked.connect(lambda: self._bookmark_selected_finding(self.table_enh, "ENHANCED_CROP"))
+        h_ctrl.addWidget(self.btn_bm_enh)
 
         self.lbl_enh_status = QLabel("No super-resolution enhancement run yet on this evidence.", w)
         self.lbl_enh_status.setStyleSheet("color: #8B949E; font-size: 11px;")

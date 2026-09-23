@@ -13,11 +13,15 @@ from PySide6.QtWidgets import (
     QPushButton, QTextEdit, QFileDialog, QGroupBox, QMessageBox
 )
 
+import sqlite3
 from app.engine9_ui.case_session import CaseSession
 from app.engine9_ui.widgets.empty_state import EmptyStateWidget
 from app.engine9_ui.widgets.fluent_theme import DFIR_DARK_THEME
-from app.engine1_acquisition.image_reader import ImageReader
-from app.engine9_ui.export_module import export_derivative_clip, CONVENIENCE_COPY_LABEL
+from app.engine9_ui.export_module import (
+    export_derivative_clip,
+    export_redacted_clip,
+    CONVENIENCE_COPY_LABEL,
+)
 from app.engine10_compliance.bsa_sec63 import generate_bsa_sec63_cert_draft, SECTION_63_DISCLAIMER
 from app.engine10_compliance.report_builder import build_json_report, generate_case_report_pdf_with_sec63
 
@@ -88,6 +92,18 @@ class Page10Reporting(QWidget):
         """)
         self.btn_export_mp4.clicked.connect(self._export_mp4)
         act_h.addWidget(self.btn_export_mp4)
+
+        self.btn_export_redacted = QPushButton("Export with Redaction (.mp4)", self)
+        self.btn_export_redacted.setStyleSheet("""
+            background-color: #9E6A03;
+            color: #FFFFFF;
+            font-weight: bold;
+            padding: 8px 16px;
+            border-radius: 4px;
+            border: none;
+        """)
+        self.btn_export_redacted.clicked.connect(self._export_redacted_mp4)
+        act_h.addWidget(self.btn_export_redacted)
 
         self.btn_gen_pdf = QPushButton("Generate Section 63 Certificate (PDF)", self)
         self.btn_gen_pdf.setStyleSheet("""
@@ -205,16 +221,20 @@ class Page10Reporting(QWidget):
         raw_temp_path = os.path.join(deriv_dir, f"{entry.file_id}_raw.h264")
         mp4_out_path = os.path.join(deriv_dir, f"{entry.file_id}_convenience.mp4")
 
-        # Dump raw elementary bytes to temporary file for remuxing
-        with ImageReader(self.session.image_path) as reader:
-            if entry.cluster_runs:
-                start_sec = entry.cluster_runs[0].start_sector
-                sec_cnt = entry.cluster_runs[0].sector_count
-                reader.seek(start_sec * 512)
-                stream_bytes = reader.read(sec_cnt * 512)
-            else:
-                reader.seek(0)
-                stream_bytes = reader.read(min(entry.size_bytes, 10 * 1024 * 1024))
+        # Dump raw elementary bytes to temporary file for remuxing via shared session reader
+        reader = self.session.get_image_reader()
+        if not reader:
+            QMessageBox.warning(self, "Image Reader Error", "Cannot open evidence image.")
+            return
+
+        if entry.cluster_runs:
+            start_sec = entry.cluster_runs[0].start_sector
+            sec_cnt = entry.cluster_runs[0].sector_count
+            reader.seek(start_sec * 512)
+            stream_bytes = reader.read(sec_cnt * 512)
+        else:
+            reader.seek(0)
+            stream_bytes = reader.read(min(entry.size_bytes, 10 * 1024 * 1024))
 
         with open(raw_temp_path, "wb") as f_raw:
             f_raw.write(stream_bytes)
@@ -237,6 +257,137 @@ class Page10Reporting(QWidget):
             self._update_text_preview()
         except Exception as e:
             QMessageBox.critical(self, "Export Failed", f"Remuxer export failed:\n\n{e}")
+
+    def _export_redacted_mp4(self):
+        """
+        Exports a derivative convenience copy with face and license plate bounding boxes redacted.
+        CRITICAL ARCHITECTURAL BOUNDARY:
+        This is the one place in the system where re-encoding is legitimate — because it
+        only ever touches the already-separate, non-evidentiary export path
+        (export_module.py -> remuxer.py), never the primary evidentiary file.
+        The primary evidentiary file remains strictly untouched, bit-pure, and read-only.
+        """
+        entry = self.session.active_file_entry
+        if not entry or not self.session.has_evidence:
+            QMessageBox.warning(self, "No Clip", "Select an active video clip to export with redaction.")
+            return
+
+        # Query detections for this clip to collect redaction boxes
+        redaction_boxes = []
+        is_simulated_warning = False
+
+        if self.session.db_path and os.path.exists(self.session.db_path):
+            try:
+                conn = sqlite3.connect(self.session.db_path)
+                cur = conn.cursor()
+
+                # Check face detections
+                cur.execute(
+                    "SELECT bbox_json, is_simulated FROM face_detections WHERE file_id = ?",
+                    (entry.file_id,)
+                )
+                for bbox_str, is_sim in cur.fetchall():
+                    if is_sim:
+                        is_simulated_warning = True
+                    try:
+                        box = json.loads(bbox_str)
+                        if isinstance(box, list) and len(box) == 4:
+                            redaction_boxes.append(box)
+                    except Exception:
+                        pass
+
+                # Check plate detections
+                cur.execute(
+                    "SELECT bbox_json, is_simulated FROM plate_detections WHERE file_id = ?",
+                    (entry.file_id,)
+                )
+                for bbox_str, is_sim in cur.fetchall():
+                    if is_sim:
+                        is_simulated_warning = True
+                    try:
+                        box = json.loads(bbox_str)
+                        if isinstance(box, list) and len(box) == 4:
+                            redaction_boxes.append(box)
+                    except Exception:
+                        pass
+
+                # Check general detections for face/plate/person
+                cur.execute(
+                    "SELECT bbox_json, is_simulated FROM detections WHERE file_id = ? AND class_name IN ('face', 'plate', 'license_plate', 'person')",
+                    (entry.file_id,)
+                )
+                for bbox_str, is_sim in cur.fetchall():
+                    if is_sim:
+                        is_simulated_warning = True
+                    try:
+                        box = json.loads(bbox_str)
+                        if isinstance(box, list) and len(box) == 4:
+                            redaction_boxes.append(box)
+                    except Exception:
+                        pass
+
+                conn.close()
+            except Exception as e:
+                QMessageBox.critical(self, "Database Error", f"Failed to query detections: {e}")
+                return
+
+        # Check simulated detections warning per Section 3.1
+        if is_simulated_warning:
+            reply = QMessageBox.warning(
+                self,
+                "Simulated Detections Warning",
+                "Redaction is based on simulated detections and may miss real faces/plates — verify manually before sharing.\n\nDo you want to proceed with redacted export?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+        case_dir = os.path.dirname(self.session.db_path)
+        deriv_dir = os.path.join(case_dir, "derivatives")
+        os.makedirs(deriv_dir, exist_ok=True)
+
+        raw_temp_path = os.path.join(deriv_dir, f"{entry.file_id}_raw.h264")
+        mp4_out_path = os.path.join(deriv_dir, f"{entry.file_id}_redacted.mp4")
+
+        reader = self.session.get_image_reader()
+        if not reader:
+            QMessageBox.warning(self, "Image Reader Error", "Cannot open evidence image.")
+            return
+
+        if entry.cluster_runs:
+            start_sec = entry.cluster_runs[0].start_sector
+            sec_cnt = entry.cluster_runs[0].sector_count
+            reader.seek(start_sec * 512)
+            stream_bytes = reader.read(sec_cnt * 512)
+        else:
+            reader.seek(0)
+            stream_bytes = reader.read(min(entry.size_bytes, 10 * 1024 * 1024))
+
+        with open(raw_temp_path, "wb") as f_raw:
+            f_raw.write(stream_bytes)
+
+        try:
+            res = export_redacted_clip(
+                db_path=self.session.db_path,
+                case_id=self.session.case_id,
+                input_raw_path=raw_temp_path,
+                output_export_path=mp4_out_path,
+                redaction_boxes=redaction_boxes,
+                is_simulated_warning=is_simulated_warning,
+            )
+            QMessageBox.information(
+                self,
+                "Redacted Convenience Copy Exported",
+                f"Exported redacted non-evidentiary derivative clip:\n\n"
+                f"File: {res['export_path']}\n"
+                f"Independent SHA-256: {res['export_hash']}\n"
+                f"Redaction Boxes Applied: {res['box_count']}\n\n"
+                f"Mandatory Label: {res['label']}"
+            )
+            self._update_text_preview()
+        except Exception as e:
+            QMessageBox.critical(self, "Redacted Export Failed", f"Redacted export failed:\n\n{e}")
 
     def _generate_pdf(self):
         if not self.session.has_case:

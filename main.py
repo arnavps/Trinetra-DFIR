@@ -1,4 +1,4 @@
-"""Entrypoint for starting the UniDVR-Forensics PySide6 desktop application."""
+"""Entrypoint for starting the Trinetra-DFIR PySide6 desktop application."""
 
 import sys
 from PySide6.QtWidgets import QApplication

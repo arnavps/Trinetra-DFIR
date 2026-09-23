@@ -18,45 +18,7 @@ from app.engine9_ui.case_session import CaseSession
 from app.engine9_ui.widgets.fluent_theme import DFIR_DARK_THEME
 from app.engine1_acquisition.writeblock_check import verify_read_only, WriteBlockViolationError
 from app.engine1_acquisition.acquirer import acquire_image, AcquisitionResult
-
-
-class AcquisitionWorker(QThread):
-    """Background worker for bit-stream acquisition and hashing."""
-    progress_signal = Signal(int, int)  # bytes_done, total_bytes
-    finished_signal = Signal(object)    # AcquisitionResult
-    error_signal = Signal(str)          # exception message
-
-    def __init__(
-        self,
-        source_path: str,
-        dest_path: str,
-        case_id: str,
-        db_path: str,
-        enforce_write_block: bool = True,
-    ):
-        super().__init__()
-        self.source_path = source_path
-        self.dest_path = dest_path
-        self.case_id = case_id
-        self.db_path = db_path
-        self.enforce_write_block = enforce_write_block
-
-    def run(self):
-        try:
-            def on_progress(done: int, total: int):
-                self.progress_signal.emit(done, total)
-
-            result = acquire_image(
-                source_path=self.source_path,
-                dest_path=self.dest_path,
-                case_id=self.case_id,
-                db_path=self.db_path,
-                enforce_write_block=self.enforce_write_block,
-                progress_callback=on_progress,
-            )
-            self.finished_signal.emit(result)
-        except Exception as e:
-            self.error_signal.emit(str(e))
+from app.engine9_ui.job_manager import JobManager
 
 
 class Page1Intake(QWidget):
@@ -450,17 +412,33 @@ class Page1Intake(QWidget):
         self.progress_bar.setValue(0)
         self.lbl_acq_status.setText(f"Acquiring from {os.path.basename(source)}...")
 
-        self.worker = AcquisitionWorker(
-            source_path=source,
-            dest_path=dest_path,
-            case_id=self.session.case_id,
-            db_path=self.session.db_path,
-            enforce_write_block=False,
+        def _acq_task(progress_callback=None):
+            def on_progress(done: int, total: int):
+                if progress_callback:
+                    pct = int((done / total) * 100) if total > 0 else 0
+                    progress_callback(pct, f"Processed {done / (1024*1024):.1f} MB / {total / (1024*1024):.1f} MB ({pct}%)")
+
+            return acquire_image(
+                source_path=source,
+                dest_path=dest_path,
+                case_id=self.session.case_id,
+                db_path=self.session.db_path,
+                enforce_write_block=False,
+                progress_callback=on_progress,
+            )
+
+        def _on_job_progress(pct: int, msg: str):
+            self.progress_bar.setValue(pct)
+            self.lbl_acq_status.setText(msg)
+
+        JobManager.instance().submit_job(
+            job_type="ACQUISITION",
+            description=f"Acquire & Hash ({os.path.basename(source)})",
+            task_fn=_acq_task,
+            on_success=self._on_acq_finished,
+            on_error=self._on_acq_error,
+            on_progress=_on_job_progress,
         )
-        self.worker.progress_signal.connect(self._on_acq_progress)
-        self.worker.finished_signal.connect(self._on_acq_finished)
-        self.worker.error_signal.connect(self._on_acq_error)
-        self.worker.start()
 
     def _on_acq_progress(self, done: int, total: int):
         if total > 0:

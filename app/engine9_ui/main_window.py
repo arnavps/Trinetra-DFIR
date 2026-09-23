@@ -25,7 +25,7 @@ from app.engine9_ui.case_session import CaseSession
 from app.engine9_ui.widgets.fluent_theme import DFIR_DARK_THEME
 from app.engine9_ui.widgets.status_ribbon import StatusRibbon
 
-# 10 Dedicated Forensic Pages
+# 12 Dedicated Forensic Pages
 from app.engine9_ui.pages.page1_intake import Page1Intake
 from app.engine9_ui.pages.page2_acquisition import Page2Acquisition
 from app.engine9_ui.pages.page3_oem_detect import Page3OemDetect
@@ -36,6 +36,9 @@ from app.engine9_ui.pages.page7_timeline import Page7Timeline
 from app.engine9_ui.pages.page8_ai_triage import Page8AiTriage
 from app.engine9_ui.pages.page9_audit_log import Page9AuditLog
 from app.engine9_ui.pages.page10_reporting import Page10Reporting
+from app.engine9_ui.pages.page11_timeline import Page11CaseTimeline
+from app.engine9_ui.pages.page12_case_health import Page12CaseHealth
+from app.engine9_ui.widgets.jobs_panel import JobsPanel
 
 from app.engine3_parsers.fs_base import ExtractedFileEntry
 
@@ -170,6 +173,8 @@ class MainWindow(QMainWindow):
             "8. AI Analytics & Triage",
             "9. Chain-of-Custody Log",
             "10. Export & BSA Reports",
+            "11. Unified Case Timeline",
+            "12. Case Health Dashboard",
         ]
         for p in pages_meta:
             self.nav_list.addItem(QListWidgetItem(p))
@@ -224,9 +229,15 @@ class MainWindow(QMainWindow):
         self.page8 = Page8AiTriage(self.session, self.stack)
         self.page9 = Page9AuditLog(self.session, self.stack)
         self.page10 = Page10Reporting(self.session, self.stack)
+        self.page11 = Page11CaseTimeline(self.session, self.stack)
+        self.page12 = Page12CaseHealth(self.session, self.stack)
 
-        # Connect inter-page navigation signals
-        for p in [self.page1, self.page2, self.page3, self.page4, self.page5, self.page6, self.page7, self.page8, self.page9, self.page10]:
+        # Connect inter-page navigation signals across all 12 pages
+        for p in [
+            self.page1, self.page2, self.page3, self.page4,
+            self.page5, self.page6, self.page7, self.page8,
+            self.page9, self.page10, self.page11, self.page12
+        ]:
             p.navigate_to_page.connect(self.go_to_page)
 
         self.stack.addWidget(self.page1)
@@ -239,18 +250,18 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.page8)
         self.stack.addWidget(self.page9)
         self.stack.addWidget(self.page10)
+        self.stack.addWidget(self.page11)
+        self.stack.addWidget(self.page12)
 
         main_splitter.addWidget(self.stack)
         main_splitter.setStretchFactor(1, 4)
 
         root_v_layout.addWidget(main_splitter)
 
-        # 4. Persistent Bottom Status & Event Log Bar
-        self.status_bar = QStatusBar(self)
-        self.setStatusBar(self.status_bar)
-        self.lbl_event_ticker = QLabel("Proof-of-Life: Waiting for engine operations...", self)
-        self.lbl_event_ticker.setStyleSheet("color: #58A6FF; font-family: Consolas; font-size: 11px;")
-        self.status_bar.addWidget(self.lbl_event_ticker, 1)
+        # 4. Persistent Bottom Expandable Jobs Queue & Event Log Panel
+        self.jobs_panel = JobsPanel(self.session, self)
+        root_v_layout.addWidget(self.jobs_panel)
+        self.lbl_event_ticker = self.jobs_panel.lbl_ticker
 
         # Set default page to Page 1
         self.nav_list.setCurrentRow(0)
@@ -270,9 +281,9 @@ class MainWindow(QMainWindow):
         exit_act = file_menu.addAction("Exit")
         exit_act.triggered.connect(self.close)
 
-        # Navigation Menu
+        # Navigation Menu (All 12 pages)
         nav_menu = menubar.addMenu("&View")
-        for idx in range(1, 11):
+        for idx in range(1, 13):
             act = nav_menu.addAction(f"Page {idx}: {self.nav_list.item(idx - 1).text()}")
             act.triggered.connect(lambda _, p=idx: self.go_to_page(p))
 

@@ -12,6 +12,7 @@ Asserts:
 import json
 import os
 import sqlite3
+import time
 import pytest
 from PySide6.QtWidgets import QApplication
 
@@ -103,6 +104,12 @@ def test_two_file_isolation_full_pipeline(qapp, tmp_path):
         # Page 3: OEM Detection
         p3_1 = Page3OemDetect(session1)
         p3_1.run_detection()
+        start1 = time.time()
+        while p3_1.content_widget.isHidden() and time.time() - start1 < 5.0:
+            qapp.processEvents()
+            time.sleep(0.02)
+        for _ in range(5):
+            qapp.processEvents()
         assert not p3_1.content_widget.isHidden()
         assert "Hikvision" in p3_1.lbl_match_statement.text()
         oem_1 = "Hikvision"
@@ -177,6 +184,12 @@ def test_two_file_isolation_full_pipeline(qapp, tmp_path):
         # Page 3: OEM Detection
         p3_2 = Page3OemDetect(session2)
         p3_2.run_detection()
+        start2 = time.time()
+        while p3_2.content_widget.isHidden() and time.time() - start2 < 5.0:
+            qapp.processEvents()
+            time.sleep(0.02)
+        for _ in range(5):
+            qapp.processEvents()
         assert not p3_2.content_widget.isHidden()
         assert "Dahua" in p3_2.lbl_match_statement.text()
         oem_2 = "Dahua"

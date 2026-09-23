@@ -7,6 +7,7 @@ DFIR_DARK_THEME = {
     "text_color": "#C9D1D9",
     "text_bright": "#F0F6FC",
     "text_muted": "#8B949E",
+    "text_dim": "#8B949E",
     "accent_blue": "#1F6FEB",
     "accent_cyan": "#58A6FF",
     "status_emerald_bg": "#0D3321",

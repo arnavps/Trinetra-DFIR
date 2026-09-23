@@ -33,7 +33,7 @@ def test_real_evidence_isolation_and_no_demo_in_main_window(qapp, tmp_path):
     assert "NO CASE LOADED" in window.top_ribbon.lbl_case.text().upper()
 
     # Verify no demo item exists in the sidebar navigation or window
-    assert window.nav_list.count() == 10
+    assert window.nav_list.count() == 12
     for i in range(window.nav_list.count()):
         item_text = window.nav_list.item(i).text()
         assert "Demo" not in item_text

@@ -114,6 +114,17 @@ def init_db(db_path: str) -> None:
                     FOREIGN KEY(file_id) REFERENCES extracted_files(file_id)
                 );
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS bookmarks (
+                    id TEXT PRIMARY KEY,
+                    case_id TEXT NOT NULL,
+                    reference TEXT NOT NULL,
+                    note TEXT NOT NULL,
+                    created_by TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(case_id) REFERENCES cases(case_id)
+                );
+            """)
     finally:
         conn.close()
 

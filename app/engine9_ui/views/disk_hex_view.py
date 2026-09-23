@@ -2,14 +2,16 @@
 
 import os
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QPushButton, QTextEdit, QVBoxLayout, QWidget
-from app.engine1_acquisition.image_reader import ImageReader
 
 
 class DiskHexView(QWidget):
     """Raw sector and hex dump viewer for forensic inspection."""
 
-    def __init__(self, parent: QWidget = None):
+    def __init__(self, session=None, parent: QWidget = None):
         super().__init__(parent)
+        self.session = session
+        self.current_image_reader = None
+        self.current_image_path = None
         self.layout = QVBoxLayout(self)
 
         top_bar = QHBoxLayout()
@@ -28,14 +30,37 @@ class DiskHexView(QWidget):
         self.hex_text.setStyleSheet("font-family: Consolas, monospace; font-size: 13px;")
         self.layout.addWidget(self.hex_text)
 
-        self.current_image_path = None
+    def set_session(self, session) -> None:
+        self.session = session
+
+    def set_image_reader(self, reader) -> None:
+        self.current_image_reader = reader
 
     def set_image_path(self, image_path: str) -> None:
         self.current_image_path = image_path
+        if self.current_image_reader:
+            try:
+                self.current_image_reader.close()
+            except Exception:
+                pass
+            self.current_image_reader = None
         self._inspect_offset()
 
+    def _get_reader(self):
+        if self.session and hasattr(self.session, "get_image_reader"):
+            return self.session.get_image_reader()
+        if self.current_image_reader is not None:
+            return self.current_image_reader
+        if self.current_image_path and os.path.exists(self.current_image_path):
+            from app.engine9_ui.case_session import CaseSession
+            self.session = CaseSession()
+            self.session.image_path = self.current_image_path
+            return self.session.get_image_reader()
+        return None
+
     def _inspect_offset(self) -> None:
-        if not self.current_image_path or not os.path.exists(self.current_image_path):
+        reader = self._get_reader()
+        if not reader:
             self.hex_text.setText("No valid image file loaded.")
             return
 
@@ -45,9 +70,8 @@ class DiskHexView(QWidget):
             offset = 0
 
         try:
-            with ImageReader(self.current_image_path) as reader:
-                reader.seek(offset)
-                data = reader.read(512)
+            reader.seek(offset)
+            data = reader.read(512)
 
             lines = []
             for i in range(0, len(data), 16):

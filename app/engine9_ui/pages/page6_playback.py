@@ -11,15 +11,15 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QSlider, QFrame, QMessageBox
+    QPushButton, QSlider, QFrame, QMessageBox, QInputDialog
 )
 
 from app.engine9_ui.case_session import CaseSession
 from app.engine9_ui.widgets.empty_state import EmptyStateWidget
 from app.engine9_ui.widgets.fluent_theme import DFIR_DARK_THEME
-from app.engine1_acquisition.image_reader import ImageReader
 from app.engine5_playback.decoder import StreamDecoder
 from app.engine3_parsers.fs_base import ExtractedFileEntry
+from app.engine7_case_db.bookmarks import add_bookmark
 
 
 class Page6Playback(QWidget):
@@ -163,6 +163,23 @@ class Page6Playback(QWidget):
         self.btn_step_fwd.clicked.connect(self._step_fwd)
         ctrl_h.addWidget(self.btn_step_fwd)
 
+        self.btn_bookmark = QPushButton("🔖 Bookmark Frame", self)
+        self.btn_bookmark.setStyleSheet("""
+            QPushButton {
+                background-color: #D29922;
+                color: #0D1117;
+                font-weight: bold;
+                padding: 6px 14px;
+                border-radius: 4px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #E3B341;
+            }
+        """)
+        self.btn_bookmark.clicked.connect(self._bookmark_current_frame)
+        ctrl_h.addWidget(self.btn_bookmark)
+
         ctrl_h.addStretch()
 
         # Dedicated Trigger: The ONLY way AI analysis is initiated
@@ -186,6 +203,59 @@ class Page6Playback(QWidget):
         content_v.addLayout(ctrl_h)
         self.main_layout.addWidget(self.content_widget)
 
+    def _bookmark_current_frame(self):
+        entry = self.session.active_file_entry
+        if not entry or not self.session.has_case:
+            QMessageBox.warning(self, "No Case/Clip", "An active case and video clip are required to save a bookmark.")
+            return
+
+        frame_idx = self.current_frame_idx
+        ref_str = f"{entry.file_id}:frame_{frame_idx}"
+
+        note, ok = QInputDialog.getText(
+            self,
+            "Bookmark Evidence Frame",
+            f"Enter mandatory investigator finding / observation note for frame #{frame_idx}:",
+        )
+        if not ok:
+            return
+
+        note = note.strip()
+        if not note:
+            QMessageBox.warning(self, "Note Required", "Investigator note is mandatory before saving a bookmark.")
+            return
+
+        try:
+            investigator = self.session.investigator_name or "Investigator"
+            bookmark = add_bookmark(
+                db_path=self.session.db_path,
+                case_id=self.session.case_id,
+                reference=ref_str,
+                note=note,
+                created_by=investigator,
+            )
+            self.session.log_engine_event(
+                event_type="BOOKMARK_ADDED",
+                message=f"Bookmark added for {ref_str}: '{note}'",
+                details={
+                    "bookmark_id": bookmark.id,
+                    "reference": ref_str,
+                    "note": note,
+                    "created_by": investigator,
+                },
+            )
+            QMessageBox.information(
+                self,
+                "Bookmark Saved",
+                f"Evidence frame successfully flagged:\n\n"
+                f"Reference: {ref_str}\n"
+                f"Note: {note}\n"
+                f"Created by: {investigator}\n\n"
+                f"Visible on Case Timeline (Page 11) and BSA Section 63 Report (Page 10)."
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "Bookmark Error", f"Failed to save bookmark:\n{e}")
+
     def _on_session_changed(self):
         if not self.session.active_file_entry:
             self.empty_widget.setVisible(True)
@@ -204,17 +274,21 @@ class Page6Playback(QWidget):
         self.timer.stop()
         self.btn_play.setText("▶ Play")
 
-        # Read clip stream bytes directly from ImageReader
+        # Read clip stream bytes directly using shared session reader
         try:
-            with ImageReader(self.session.image_path) as reader:
-                if entry.cluster_runs:
-                    start_sec = entry.cluster_runs[0].start_sector
-                    sec_cnt = entry.cluster_runs[0].sector_count
-                    reader.seek(start_sec * 512)
-                    stream_bytes = reader.read(sec_cnt * 512)
-                else:
-                    reader.seek(0)
-                    stream_bytes = reader.read(min(entry.size_bytes, 10 * 1024 * 1024))
+            reader = self.session.get_image_reader()
+            if not reader:
+                QMessageBox.warning(self, "Image Reader Error", "Cannot open evidence image.")
+                return
+
+            if entry.cluster_runs:
+                start_sec = entry.cluster_runs[0].start_sector
+                sec_cnt = entry.cluster_runs[0].sector_count
+                reader.seek(start_sec * 512)
+                stream_bytes = reader.read(sec_cnt * 512)
+            else:
+                reader.seek(0)
+                stream_bytes = reader.read(min(entry.size_bytes, 10 * 1024 * 1024))
 
             oem_desc = self.session.virtual_file_system.oem if self.session.virtual_file_system else "auto"
             self.decoder = StreamDecoder(stream_bytes, oem=oem_desc, max_frames=None)

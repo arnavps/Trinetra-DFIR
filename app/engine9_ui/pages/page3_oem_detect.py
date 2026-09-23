@@ -16,12 +16,12 @@ from app.engine9_ui.widgets.empty_state import EmptyStateWidget
 from app.engine9_ui.widgets.fluent_theme import DFIR_DARK_THEME
 from app.engine2_detector.signature_matcher import match_signature, MatchResult
 from app.engine2_detector.fallback_classifier import FallbackClassifier
-from app.engine1_acquisition.image_reader import ImageReader
 
 from app.engine3_parsers.hikfat_parser import HikFatParser
 from app.engine3_parsers.dhfs_parser import DhfsParser
 from app.engine3_parsers.heimvision_parser import HeimVisionParser
 from app.engine3_parsers.generic_parser import GenericParser
+from app.engine9_ui.job_manager import JobManager
 
 
 class Page3OemDetect(QWidget):
@@ -191,58 +191,90 @@ class Page3OemDetect(QWidget):
             self.content_widget.setVisible(True)
 
     def run_detection(self):
-        """Executes real OEM signature detection against the currently loaded image."""
+        """Executes real OEM signature detection against the currently loaded image inside a background job."""
         if not self.session.has_evidence:
             return
 
         image_path = self.session.image_path
-        match_res = match_signature(image_path)
-        self.session.set_oem_result(match_res)
+        self.btn_run_scan.setEnabled(False)
+        self.lbl_match_statement.setText("Scanning OEM filesystem signatures in background...")
 
-        if match_res.matched:
-            # Deterministic Match Path
-            self.grp_match.setVisible(True)
-            self.grp_fallback.setVisible(False)
-
-            statement = f"Bytes at offset 0x{match_res.matched_offset:X} match the published {match_res.oem} signature."
-            self.lbl_match_statement.setText(statement)
-            self.lbl_sig_details.setText(
-                f"Signature ID: {match_res.signature_id} | Description: {match_res.description} | Target: {match_res.oem}"
-            )
-            self.btn_parse.setText(f"Parse Filesystem ({match_res.oem}) →")
-        else:
-            # Random Forest Fallback Path
-            self.grp_match.setVisible(False)
-            self.grp_fallback.setVisible(True)
-
-            # Read first sector or active chunk for heuristic features
-            try:
-                with ImageReader(image_path) as r:
-                    sector_bytes = r.read(4096)
+        def _scan_worker(progress_callback=None):
+            if progress_callback:
+                progress_callback(15, f"Scanning signatures on {os.path.basename(image_path)}...")
+            match_res = match_signature(image_path)
+            fb_res = None
+            if not match_res.matched:
+                if progress_callback:
+                    progress_callback(55, "Scanning heuristic fallback features...")
+                reader = self.session.get_image_reader()
+                if reader:
+                    reader.seek(0)
+                    sector_bytes = reader.read(4096)
+                else:
+                    sector_bytes = b""
                 clf = FallbackClassifier()
-                pred = clf.predict(sector_bytes)
-                self.fallback_result = pred
+                fb_res = clf.predict(sector_bytes)
 
+            if progress_callback:
+                progress_callback(100, "Signature scan complete.")
+            return {"match_res": match_res, "fallback_res": fb_res}
+
+        def _on_scan_success(data):
+            self.btn_run_scan.setEnabled(True)
+            match_res = data["match_res"]
+            self.session.set_oem_result(match_res)
+
+            if match_res.matched:
+                self.grp_match.setVisible(True)
+                self.grp_fallback.setVisible(False)
+                statement = f"Bytes at offset 0x{match_res.matched_offset:X} match the published {match_res.oem} signature."
+                self.lbl_match_statement.setText(statement)
+                self.lbl_sig_details.setText(
+                    f"Signature ID: {match_res.signature_id} | Description: {match_res.description} | Target: {match_res.oem}"
+                )
+                self.btn_parse.setText(f"Parse Filesystem ({match_res.oem}) →")
+            else:
+                self.grp_match.setVisible(False)
+                self.grp_fallback.setVisible(True)
+                pred = data.get("fallback_res") or {}
+                self.fallback_result = pred
                 pred_oem = pred.get("predicted_oem", "Unknown")
                 conf = pred.get("confidence", 0.0)
                 reasoning = pred.get("reasoning", "")
-
                 self.lbl_fb_stats.setText(
                     f"Predicted OEM: {pred_oem} | Model Confidence: {conf:.2f}\nReasoning: {reasoning}"
                 )
-
                 idx = self.combo_oem_confirm.findText(pred_oem)
                 if idx >= 0:
                     self.combo_oem_confirm.setCurrentIndex(idx)
-            except Exception as e:
-                self.lbl_fb_stats.setText(f"Classification error: {e}")
+
+        def _on_scan_error(err_msg):
+            self.btn_run_scan.setEnabled(True)
+            self.lbl_match_statement.setText(f"OEM scan failed: {err_msg}")
+            QMessageBox.critical(self, "OEM Scan Error", f"Failed to scan OEM signatures:\n\n{err_msg}")
+
+        return JobManager.instance().submit_job(
+            job_type="OEM_DETECT",
+            description=f"Scan OEM Signatures ({os.path.basename(image_path)})",
+            task_fn=_scan_worker,
+            on_success=_on_scan_success,
+            on_error=_on_scan_error,
+        )
 
     def _execute_parser(self, oem_choice: str):
-        """Runs the chosen parser plugin and loads VFS into the session."""
+        """Runs the chosen parser plugin in a background job and loads VFS into the session."""
         image_path = self.session.image_path
-        oem_lower = oem_choice.lower()
+        if not image_path:
+            return
 
-        try:
+        self.btn_parse.setEnabled(False)
+        self.btn_confirm_oem.setEnabled(False)
+
+        def _parse_worker(progress_callback=None):
+            if progress_callback:
+                progress_callback(10, f"Initializing {oem_choice} filesystem parser...")
+            oem_lower = oem_choice.lower()
             if "hik" in oem_lower:
                 parser = HikFatParser()
             elif "dah" in oem_lower:
@@ -252,12 +284,31 @@ class Page3OemDetect(QWidget):
             else:
                 parser = GenericParser()
 
+            if progress_callback:
+                progress_callback(40, f"Parsing index blocks on {os.path.basename(image_path)}...")
             vfs = parser.parse(image_path)
+            if progress_callback:
+                progress_callback(100, f"Parsed {len(vfs.files)} evidentiary files.")
+            return vfs
+
+        def _on_parse_success(vfs):
+            self.btn_parse.setEnabled(True)
+            self.btn_confirm_oem.setEnabled(True)
             self.session.set_vfs(vfs)
-            # Navigate to Page 4 (Filesystem Explorer)
             self.navigate_to_page.emit(4)
-        except Exception as e:
-            QMessageBox.critical(self, "Parser Error", f"Parser failed for {oem_choice}:\n\n{e}")
+
+        def _on_parse_error(err_msg):
+            self.btn_parse.setEnabled(True)
+            self.btn_confirm_oem.setEnabled(True)
+            QMessageBox.critical(self, "Parser Error", f"Parser failed for {oem_choice}:\n\n{err_msg}")
+
+        JobManager.instance().submit_job(
+            job_type="VFS_PARSE",
+            description=f"Parse {oem_choice} VFS ({os.path.basename(image_path)})",
+            task_fn=_parse_worker,
+            on_success=_on_parse_success,
+            on_error=_on_parse_error,
+        )
 
     def _on_parse_clicked(self):
         if self.session.oem_match_result:

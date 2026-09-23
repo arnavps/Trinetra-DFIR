@@ -1,7 +1,7 @@
 """Standardized honest empty-state widget for Trinetra-DFIR pages."""
 
 from typing import Optional, Callable
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton
 from app.engine9_ui.widgets.fluent_theme import DFIR_DARK_THEME
 
@@ -12,6 +12,7 @@ class EmptyStateWidget(QWidget):
     Renders an honest, professional explanation when prerequisite data is not yet available.
     Never papers over missing data with mock rows or placeholder metrics.
     """
+    action_clicked = Signal()
 
     def __init__(
         self,
@@ -21,8 +22,15 @@ class EmptyStateWidget(QWidget):
         button_text: Optional[str] = None,
         button_callback: Optional[Callable[[], None]] = None,
         parent: Optional[QWidget] = None,
+        icon: Optional[str] = None,
+        action_text: Optional[str] = None,
+        **kwargs,
     ):
         super().__init__(parent)
+        if icon is not None:
+            icon_str = icon
+        if action_text is not None:
+            button_text = action_text
         self.layout = QVBoxLayout(self)
         self.layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.layout.setSpacing(12)
@@ -74,6 +82,7 @@ class EmptyStateWidget(QWidget):
                     color: #0D1117;
                 }}
             """)
+            self.btn_action.clicked.connect(self.action_clicked.emit)
             if button_callback:
                 self.btn_action.clicked.connect(button_callback)
             self.layout.addWidget(self.btn_action, alignment=Qt.AlignmentFlag.AlignCenter)

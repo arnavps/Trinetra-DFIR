@@ -10,6 +10,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
 from app.engine7_case_db.audit_log import verify_audit_chain, get_extracted_files, get_db_connection
+from app.engine7_case_db.bookmarks import get_bookmarks
 from app.engine8_ai.model_registry import verify_all_models
 
 
@@ -17,6 +18,7 @@ def build_json_report(db_path: str, case_id: str) -> Dict[str, Any]:
     chain_valid = verify_audit_chain(db_path, case_id)
     files = get_extracted_files(db_path, case_id)
     models_status = verify_all_models()
+    bookmarks = get_bookmarks(db_path, case_id)
 
     conn = get_db_connection(db_path)
     cursor = conn.cursor()
@@ -44,6 +46,8 @@ def build_json_report(db_path: str, case_id: str) -> Dict[str, Any]:
         "models_verification": models_status,
         "detections_count": len(det_items),
         "detections": det_items,
+        "bookmarks_count": len(bookmarks),
+        "bookmarks": bookmarks,
         "extracted_files": [
             {
                 "file_id": f.file_id,
@@ -154,6 +158,33 @@ def generate_case_report_pdf(db_path: str, case_id: str, output_pdf_path: str) -
 
     story.append(Spacer(1, 14))
 
+    # Investigator Findings (Bookmarks) Section - clearly separated from AI
+    story.append(Paragraph("<b>Investigator Findings & Manual Flags (Bookmarks):</b>", styles['Heading2']))
+    story.append(Spacer(1, 4))
+    bookmarks = report_data.get("bookmarks", [])
+    if bookmarks:
+        bm_table_data = [["ID", "Evidence Reference", "Investigator Note", "Created By", "Timestamp"]]
+        for bm in bookmarks:
+            bm_table_data.append([
+                bm["id"],
+                bm["reference"],
+                bm["note"],
+                bm["created_by"],
+                bm["created_at"][:19]
+            ])
+        bmt = Table(bm_table_data, colWidths=[75, 115, 160, 80, 80])
+        bmt.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#855A00')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ]))
+        story.append(bmt)
+    else:
+        story.append(Paragraph("<i>No investigator bookmarks or manual flags recorded.</i>", styles['Normal']))
+
+    story.append(Spacer(1, 14))
+
     # Audit Chain Log Section
     story.append(Paragraph("<b>Chain of Custody Audit Log:</b>", styles['Heading2']))
     story.append(Spacer(1, 6))
@@ -207,6 +238,32 @@ def generate_case_report_pdf_with_sec63(db_path: str, case_id: str, output_pdf_p
     story.append(Spacer(1, 4))
     story.append(Paragraph(f"<pre>{sec63_draft['part_a']}</pre>", styles['Code']))
     story.append(Spacer(1, 6))
+
+    # Investigator Findings (Bookmarks) Section
+    story.append(Paragraph("<b>Investigator Findings & Manual Flags (Bookmarks):</b>", styles['Heading2']))
+    story.append(Spacer(1, 4))
+    bookmarks = report_data.get("bookmarks", [])
+    if bookmarks:
+        bm_table_data = [["ID", "Evidence Reference", "Investigator Note", "Created By", "Timestamp"]]
+        for bm in bookmarks:
+            bm_table_data.append([
+                bm["id"],
+                bm["reference"],
+                bm["note"],
+                bm["created_by"],
+                bm["created_at"][:19]
+            ])
+        bmt = Table(bm_table_data, colWidths=[75, 115, 160, 80, 80])
+        bmt.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#855A00')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ]))
+        story.append(bmt)
+    else:
+        story.append(Paragraph("<i>No investigator bookmarks or manual flags recorded.</i>", styles['Normal']))
+    story.append(Spacer(1, 10))
 
     # Derivative Exports Section
     story.append(Paragraph("<b>Derivative Exports (Non-Evidentiary):</b>", styles['Heading2']))

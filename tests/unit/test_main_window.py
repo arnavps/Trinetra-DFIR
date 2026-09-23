@@ -19,8 +19,8 @@ def qapp():
 
 def test_main_window_navigation_and_views(qapp):
     window = MainWindow()
-    assert window.nav_list.count() == 10
-    assert window.stack.count() == 10
+    assert window.nav_list.count() == 12
+    assert window.stack.count() == 12
 
     # Initial empty state check
     assert window.session.has_case is False

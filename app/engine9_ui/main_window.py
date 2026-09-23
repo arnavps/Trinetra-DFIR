@@ -103,6 +103,15 @@ class MainWindow(QMainWindow):
             QSplitter::handle:horizontal:hover {{
                 background-color: #58A6FF;
             }}
+            QSplitter::handle:vertical {{
+                background-color: #21262D;
+                border-top: 1px solid #30363D;
+                border-bottom: 1px solid #30363D;
+                height: 6px;
+            }}
+            QSplitter::handle:vertical:hover {{
+                background-color: #58A6FF;
+            }}
             QStatusBar {{
                 background-color: {DFIR_DARK_THEME['panel_bg']};
                 color: {DFIR_DARK_THEME['text_muted']};
@@ -127,20 +136,31 @@ class MainWindow(QMainWindow):
         self.main_splitter.setHandleWidth(6)
         self.main_splitter.setChildrenCollapsible(False)
 
-        # Left Sidebar Container — freely resizable between 220px and 900px
+        # Left Sidebar Container — resizable horizontally via main_splitter
         sidebar_widget = QWidget(self.main_splitter)
         sidebar_widget.setMinimumWidth(220)
         sidebar_widget.setMaximumWidth(900)
         sidebar_layout = QVBoxLayout(sidebar_widget)
-        sidebar_layout.setContentsMargins(8, 8, 8, 8)
-        sidebar_layout.setSpacing(10)
+        sidebar_layout.setContentsMargins(6, 6, 6, 6)
+        sidebar_layout.setSpacing(0)
 
-        # 2a. Page Navigation List
-        lbl_nav = QLabel("WORKFLOW NAVIGATION", sidebar_widget)
+        # 2a. Inner vertical splitter: lets user freely adjust vertical height between
+        # Workflow Navigation and Evidence Navigator
+        self.sidebar_splitter = QSplitter(Qt.Orientation.Vertical, sidebar_widget)
+        self.sidebar_splitter.setHandleWidth(6)
+        self.sidebar_splitter.setChildrenCollapsible(False)
+
+        # Top Pane: Page Navigation List
+        nav_container = QWidget(self.sidebar_splitter)
+        nav_vbox = QVBoxLayout(nav_container)
+        nav_vbox.setContentsMargins(0, 0, 0, 4)
+        nav_vbox.setSpacing(6)
+
+        lbl_nav = QLabel("WORKFLOW NAVIGATION", nav_container)
         lbl_nav.setStyleSheet("font-family: 'Segoe UI'; font-weight: bold; font-size: 10px; color: #8B949E; margin-left: 4px;")
-        sidebar_layout.addWidget(lbl_nav)
+        nav_vbox.addWidget(lbl_nav)
 
-        self.nav_list = QListWidget(sidebar_widget)
+        self.nav_list = QListWidget(nav_container)
         self.nav_list.setStyleSheet(f"""
             QListWidget {{
                 background-color: {DFIR_DARK_THEME['panel_bg']};
@@ -152,7 +172,7 @@ class MainWindow(QMainWindow):
                 padding: 4px;
             }}
             QListWidget::item {{
-                height: 32px;
+                height: 30px;
                 padding-left: 8px;
                 border-radius: 4px;
                 margin-bottom: 2px;
@@ -186,14 +206,20 @@ class MainWindow(QMainWindow):
         for p in pages_meta:
             self.nav_list.addItem(QListWidgetItem(p))
         self.nav_list.currentRowChanged.connect(self._on_page_nav_changed)
-        sidebar_layout.addWidget(self.nav_list, stretch=2)
+        nav_vbox.addWidget(self.nav_list)
+        self.sidebar_splitter.addWidget(nav_container)
 
-        # 2b. Evidence Navigator Tree
-        lbl_tree = QLabel("EVIDENCE NAVIGATOR", sidebar_widget)
+        # Bottom Pane: Evidence Navigator Tree
+        evidence_container = QWidget(self.sidebar_splitter)
+        evidence_vbox = QVBoxLayout(evidence_container)
+        evidence_vbox.setContentsMargins(0, 4, 0, 0)
+        evidence_vbox.setSpacing(6)
+
+        lbl_tree = QLabel("EVIDENCE NAVIGATOR", evidence_container)
         lbl_tree.setStyleSheet(lbl_nav.styleSheet())
-        sidebar_layout.addWidget(lbl_tree)
+        evidence_vbox.addWidget(lbl_tree)
 
-        self.evidence_tree = QTreeWidget(sidebar_widget)
+        self.evidence_tree = QTreeWidget(evidence_container)
         self.evidence_tree.setHeaderHidden(True)
         self.evidence_tree.setStyleSheet(f"""
             QTreeWidget {{
@@ -221,7 +247,11 @@ class MainWindow(QMainWindow):
         self.evidence_tree.itemDoubleClicked.connect(self._on_tree_item_double_clicked)
         self.evidence_tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.evidence_tree.setTextElideMode(Qt.TextElideMode.ElideMiddle)
-        sidebar_layout.addWidget(self.evidence_tree, stretch=3)
+        evidence_vbox.addWidget(self.evidence_tree)
+        self.sidebar_splitter.addWidget(evidence_container)
+
+        self.sidebar_splitter.setSizes([340, 360])
+        sidebar_layout.addWidget(self.sidebar_splitter)
 
         self.main_splitter.addWidget(sidebar_widget)
 

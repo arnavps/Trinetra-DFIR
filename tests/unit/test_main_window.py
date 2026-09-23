@@ -74,3 +74,60 @@ def test_main_window_real_case_integration(qapp, tmp_path):
     assert window.evidence_tree.topLevelItemCount() == 1
     root_item = window.evidence_tree.topLevelItem(0)
     assert "Case: CR-UNIT-2026" in root_item.text(0)
+
+
+def test_bottom_proof_of_life_panel_resizability_and_tabs(qapp):
+    from PySide6.QtCore import Qt
+
+    window = MainWindow()
+    window.resize(1400, 900)
+    window.show()
+    qapp.processEvents()
+
+    assert hasattr(window, "content_v_splitter")
+    assert window.content_v_splitter.orientation() == Qt.Orientation.Vertical
+    assert window.content_v_splitter.count() == 2
+    assert window.content_v_splitter.widget(0) is window.main_splitter
+    assert window.content_v_splitter.widget(1) is window.jobs_panel
+
+    # Check JobsPanel tabs and log table
+    assert hasattr(window.jobs_panel, "tabs")
+    assert window.jobs_panel.tabs.count() == 2
+    assert "Jobs" in window.jobs_panel.tabs.tabText(0)
+    assert "Proof-of-Life" in window.jobs_panel.tabs.tabText(1)
+    assert hasattr(window.jobs_panel, "log_table")
+
+    # Initially collapsed
+    assert window.jobs_panel._is_expanded is False
+    assert window.jobs_panel.queue_frame.isHidden()
+
+    # Simulate event logged -> updates ticker and appends to proof-of-life stream
+    window.session.log_engine_event("INTEGRITY_CHECK", "Verification hash matches SHA256")
+    qapp.processEvents()
+    assert "INTEGRITY_CHECK" in window.jobs_panel.lbl_ticker.text()
+    assert window.jobs_panel.log_table.rowCount() == 1
+    assert "INTEGRITY_CHECK" in window.jobs_panel.log_table.item(0, 1).text()
+    assert "Verification hash matches" in window.jobs_panel.log_table.item(0, 2).text()
+
+    # Toggle expand via button
+    window.jobs_panel.btn_toggle.click()
+    assert window.jobs_panel._is_expanded is True
+    assert not window.jobs_panel.queue_frame.isHidden()
+
+    # Toggle collapse via button
+    window.jobs_panel.btn_toggle.click()
+    assert window.jobs_panel._is_expanded is False
+    assert window.jobs_panel.queue_frame.isHidden()
+
+    # Moving splitter up expands the panel automatically
+    window.content_v_splitter.setSizes([600, 250])
+    window._on_content_splitter_moved(600, 1)
+    assert window.jobs_panel._is_expanded is True
+    assert not window.jobs_panel.queue_frame.isHidden()
+
+    # Clear log button
+    window.jobs_panel.btn_clear_log.click()
+    assert window.jobs_panel.log_table.rowCount() == 0
+
+    window.close()
+

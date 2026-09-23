@@ -131,8 +131,13 @@ class MainWindow(QMainWindow):
         self.top_ribbon = StatusRibbon(self.session, self)
         root_v_layout.addWidget(self.top_ribbon)
 
-        # 2. Main Horizontal Splitter: Left Sidebar vs Main Page Area
-        self.main_splitter = QSplitter(Qt.Orientation.Horizontal, central_widget)
+        # 2. Main Workspace Splitter: Upper Workstation vs Bottom Proof-of-Life & Jobs Panel
+        self.content_v_splitter = QSplitter(Qt.Orientation.Vertical, central_widget)
+        self.content_v_splitter.setHandleWidth(6)
+        self.content_v_splitter.setChildrenCollapsible(False)
+
+        # 3. Main Horizontal Splitter: Left Sidebar vs Main Page Area
+        self.main_splitter = QSplitter(Qt.Orientation.Horizontal, self.content_v_splitter)
         self.main_splitter.setHandleWidth(6)
         self.main_splitter.setChildrenCollapsible(False)
 
@@ -297,12 +302,19 @@ class MainWindow(QMainWindow):
         self.main_splitter.setStretchFactor(1, 1)
         self.main_splitter.setSizes([380, 1100])
 
-        root_v_layout.addWidget(self.main_splitter)
+        self.content_v_splitter.addWidget(self.main_splitter)
 
-        # 4. Persistent Bottom Expandable Jobs Queue & Event Log Panel
-        self.jobs_panel = JobsPanel(self.session, self)
-        root_v_layout.addWidget(self.jobs_panel)
+        # 4. Persistent Bottom Expandable Jobs Queue & Proof-of-Life Workstation
+        self.jobs_panel = JobsPanel(self.session, self.content_v_splitter)
+        self.content_v_splitter.addWidget(self.jobs_panel)
         self.lbl_event_ticker = self.jobs_panel.lbl_ticker
+
+        self.content_v_splitter.setStretchFactor(0, 1)
+        self.content_v_splitter.setStretchFactor(1, 0)
+        self.content_v_splitter.setSizes([750, 48])
+        self.content_v_splitter.splitterMoved.connect(self._on_content_splitter_moved)
+
+        root_v_layout.addWidget(self.content_v_splitter)
 
         # Set default page to Page 1
         self.nav_list.setCurrentRow(0)
@@ -400,6 +412,17 @@ class MainWindow(QMainWindow):
             self.go_to_page(6)  # Playback
         elif data == "GOTO_PAGE_5":
             self.go_to_page(5)  # Carver
+
+    def _on_content_splitter_moved(self, pos: int, index: int):
+        sizes = self.content_v_splitter.sizes()
+        if len(sizes) >= 2:
+            bottom_h = sizes[1]
+            if bottom_h > 75 and not self.jobs_panel._is_expanded:
+                self.jobs_panel.set_expanded(True, adjust_splitter=False)
+            elif bottom_h <= 52 and self.jobs_panel._is_expanded:
+                self.jobs_panel.set_expanded(False, adjust_splitter=False)
+            elif bottom_h > 75 and self.jobs_panel._is_expanded:
+                self.jobs_panel._last_expanded_height = bottom_h
 
     def _on_event_logged(self, event_data: dict):
         ts = event_data.get("timestamp", "")[:19]

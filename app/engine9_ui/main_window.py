@@ -94,8 +94,14 @@ class MainWindow(QMainWindow):
                 background-color: {DFIR_DARK_THEME['accent_blue']};
                 color: #FFFFFF;
             }}
-            QSplitter::handle {{
-                background-color: {DFIR_DARK_THEME['border_color']};
+            QSplitter::handle:horizontal {{
+                background-color: #21262D;
+                border-left: 1px solid #30363D;
+                border-right: 1px solid #30363D;
+                width: 6px;
+            }}
+            QSplitter::handle:horizontal:hover {{
+                background-color: #58A6FF;
             }}
             QStatusBar {{
                 background-color: {DFIR_DARK_THEME['panel_bg']};
@@ -117,13 +123,14 @@ class MainWindow(QMainWindow):
         root_v_layout.addWidget(self.top_ribbon)
 
         # 2. Main Horizontal Splitter: Left Sidebar vs Main Page Area
-        main_splitter = QSplitter(Qt.Orientation.Horizontal, central_widget)
-        main_splitter.setHandleWidth(2)
+        self.main_splitter = QSplitter(Qt.Orientation.Horizontal, central_widget)
+        self.main_splitter.setHandleWidth(6)
+        self.main_splitter.setChildrenCollapsible(False)
 
-        # Left Sidebar Container
-        sidebar_widget = QWidget(main_splitter)
-        sidebar_widget.setMinimumWidth(280)
-        sidebar_widget.setMaximumWidth(360)
+        # Left Sidebar Container — freely resizable between 220px and 900px
+        sidebar_widget = QWidget(self.main_splitter)
+        sidebar_widget.setMinimumWidth(220)
+        sidebar_widget.setMaximumWidth(900)
         sidebar_layout = QVBoxLayout(sidebar_widget)
         sidebar_layout.setContentsMargins(8, 8, 8, 8)
         sidebar_layout.setSpacing(10)
@@ -212,12 +219,14 @@ class MainWindow(QMainWindow):
             }}
         """)
         self.evidence_tree.itemDoubleClicked.connect(self._on_tree_item_double_clicked)
+        self.evidence_tree.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.evidence_tree.setTextElideMode(Qt.TextElideMode.ElideMiddle)
         sidebar_layout.addWidget(self.evidence_tree, stretch=3)
 
-        main_splitter.addWidget(sidebar_widget)
+        self.main_splitter.addWidget(sidebar_widget)
 
         # 3. Center Stacked Pages
-        self.stack = QStackedWidget(main_splitter)
+        self.stack = QStackedWidget(self.main_splitter)
 
         self.page1 = Page1Intake(self.session, self.stack)
         self.page2 = Page2Acquisition(self.session, self.stack)
@@ -253,10 +262,12 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.page11)
         self.stack.addWidget(self.page12)
 
-        main_splitter.addWidget(self.stack)
-        main_splitter.setStretchFactor(1, 4)
+        self.main_splitter.addWidget(self.stack)
+        self.main_splitter.setStretchFactor(0, 0)
+        self.main_splitter.setStretchFactor(1, 1)
+        self.main_splitter.setSizes([380, 1100])
 
-        root_v_layout.addWidget(main_splitter)
+        root_v_layout.addWidget(self.main_splitter)
 
         # 4. Persistent Bottom Expandable Jobs Queue & Event Log Panel
         self.jobs_panel = JobsPanel(self.session, self)

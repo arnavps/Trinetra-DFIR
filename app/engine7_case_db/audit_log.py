@@ -114,7 +114,7 @@ def get_extracted_files(db_path: str, case_id: str) -> List[ExtractedFile]:
     ]
 
 
-def verify_audit_chain(db_path: str, case_id: str) -> bool:
+def verify_audit_chain_detailed(db_path: str, case_id: str) -> Dict[str, Any]:
     conn = get_db_connection(db_path)
     cursor = conn.cursor()
     cursor.execute(
@@ -124,11 +124,26 @@ def verify_audit_chain(db_path: str, case_id: str) -> bool:
     rows = cursor.fetchall()
     conn.close()
 
+    if not rows:
+        return {
+            "valid": True,
+            "status": "PASS",
+            "broken_entry": None,
+            "total_entries": 0,
+            "details": "Audit chain is empty (0 records).",
+        }
+
     expected_prev_hash = GENESIS_HASH
 
     for row in rows:
         if row["previous_hash"] != expected_prev_hash:
-            return False
+            return {
+                "valid": False,
+                "status": "FAIL",
+                "broken_entry": row["entry_id"],
+                "total_entries": len(rows),
+                "details": f"Chain broken at entry #{row['entry_id']}: previous_hash mismatch.",
+            }
 
         recalculated_hash = compute_entry_hash(
             row["case_id"],
@@ -139,8 +154,24 @@ def verify_audit_chain(db_path: str, case_id: str) -> bool:
         )
 
         if row["entry_hash"] != recalculated_hash:
-            return False
+            return {
+                "valid": False,
+                "status": "FAIL",
+                "broken_entry": row["entry_id"],
+                "total_entries": len(rows),
+                "details": f"Cryptographic mismatch at entry #{row['entry_id']}: entry_hash tampered.",
+            }
 
         expected_prev_hash = row["entry_hash"]
 
-    return True
+    return {
+        "valid": True,
+        "status": "PASS",
+        "broken_entry": None,
+        "total_entries": len(rows),
+        "details": f"All {len(rows)} entries verified unbroken from Genesis to Entry #{rows[-1]['entry_id']}.",
+    }
+
+
+def verify_audit_chain(db_path: str, case_id: str) -> bool:
+    return verify_audit_chain_detailed(db_path, case_id)["valid"]

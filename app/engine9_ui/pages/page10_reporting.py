@@ -10,7 +10,7 @@ from typing import Optional
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QTextEdit, QFileDialog, QGroupBox, QMessageBox
+    QPushButton, QTextEdit, QFileDialog, QGroupBox, QMessageBox, QComboBox
 )
 
 import sqlite3
@@ -105,7 +105,29 @@ class Page10Reporting(QWidget):
         self.btn_export_redacted.clicked.connect(self._export_redacted_mp4)
         act_h.addWidget(self.btn_export_redacted)
 
-        self.btn_gen_pdf = QPushButton("Generate Section 63 Certificate (PDF)", self)
+        self.combo_mode = QComboBox(self)
+        self.combo_mode.addItem("Full Technical Report (14 Sections)")
+        self.combo_mode.addItem("Summary Report (Sections 1–5)")
+        self.combo_mode.setStyleSheet(f"""
+            QComboBox {{
+                background-color: #21262D;
+                color: #C9D1D9;
+                border: 1px solid {DFIR_DARK_THEME['border_color']};
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-size: 11px;
+                font-weight: bold;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: #161B22;
+                color: #C9D1D9;
+                selection-background-color: #0969DA;
+            }}
+        """)
+        self.combo_mode.currentIndexChanged.connect(self._update_text_preview)
+        act_h.addWidget(self.combo_mode)
+
+        self.btn_gen_pdf = QPushButton("Generate Section 63 Report (PDF)", self)
         self.btn_gen_pdf.setStyleSheet("""
             background-color: #238636;
             color: #FFFFFF;
@@ -393,15 +415,33 @@ class Page10Reporting(QWidget):
         if not self.session.has_case:
             return
 
+        mode = "full" if self.combo_mode.currentIndex() == 0 else "summary"
         case_dir = os.path.dirname(self.session.db_path)
-        out_pdf = os.path.join(case_dir, f"BSA_Sec63_{self.session.case_id}.pdf")
+        mode_prefix = "BSA_Sec63_Full" if mode == "full" else "BSA_Sec63_Summary"
+        out_pdf = os.path.join(case_dir, f"{mode_prefix}_{self.session.case_id}.pdf")
 
         try:
-            generate_case_report_pdf_with_sec63(self.session.db_path, self.session.case_id, out_pdf)
+            generate_case_report_pdf_with_sec63(
+                self.session.db_path,
+                self.session.case_id,
+                out_pdf,
+                mode=mode,
+                session=self.session
+            )
+            sha_companion = f"{out_pdf}.sha256"
+            sha_hash = ""
+            if os.path.exists(sha_companion):
+                with open(sha_companion, "r") as f:
+                    sha_hash = f.read().split()[0]
+
             QMessageBox.information(
                 self,
-                "Section 63 Certificate Generated",
-                f"Court-ready Section 63 BSA draft PDF generated:\n\n{out_pdf}\n\nNotice: {SECTION_63_DISCLAIMER}"
+                "Section 63 Report Generated",
+                f"Court-ready Section 63 BSA draft PDF generated:\n\n{out_pdf}\n\n"
+                f"Report Scope: {mode.upper()} TECHNICAL REPORT\n"
+                f"Self-Integrity SHA-256: {sha_hash}\n"
+                f"Sealed Companion File: {os.path.basename(sha_companion)}\n\n"
+                f"Notice: {SECTION_63_DISCLAIMER}"
             )
         except Exception as e:
             QMessageBox.critical(self, "Report Generation Error", f"Failed to generate PDF:\n\n{e}")

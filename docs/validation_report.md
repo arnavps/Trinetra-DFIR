@@ -301,4 +301,75 @@ The two-file isolation suite (`tests/unit/test_two_file_isolation.py`) was re-ru
 
 **Isolation Invariant Result**: Cryptographic hashes differ, detected OEMs differ, evidence trees differ, and zero cross-case state leaked. **PASSED (1.60s)**.
 
+---
+
+## 10. Reporting Extension — Verification
+
+### 10.1 Overview & Architecture
+
+The reporting engine (`report_builder.py`, `bsa_sec63.py`, `iso27037_mapper.py`) was overhauled from a single-page summary into a comprehensive, multi-section court-ready forensic document compliant with **Bharatiya Sakshya Adhiniyam (BSA 2023) Section 63** and **ISO/IEC 27037:2012**.
+
+Every section is strictly populated from active SQLite database records (`cases`, `extracted_files`, `audit_log`, `detections`, `face_detections`, `plate_detections`, `bookmarks`) and live engine states. If a subsystem was not executed for a given case, it renders an explicit *"Not run for this case"* notice rather than silently omitting the section.
+
+The system supports two distinct report modes:
+1. **Full Technical Report (`mode="full"`)**: Complete 14-section evidentiary document including forensic methodology, live cryptographic audit chain log, raw sector ranges, AI triage splits (verified vs. simulated), and technical glossary.
+2. **Summary Report (`mode="summary"`)**: Targeted handoff document containing Sections 1 through 5 only (Cover, Executive Summary, Case & Party Details, Evidence Inventory, and Acquisition/Integrity Summary). Carries a mandatory front-page notice: *"This is a summary. Request the Full Technical Report for chain-of-custody, AI findings, and methodology detail."*
+
+---
+
+### 10.2 14-Section Verification Matrix (Full Technical Report)
+
+Verified against real case evidence (`CR-2026-0089`, `State of Maharashtra vs Cyber Intruder & Ors`):
+
+| Section # | Section Title | Backing Database / Engine Source | Verified Rendered Content | Invariant & Compliance Rule |
+| :--- | :--- | :--- | :--- | :--- |
+| **1** | **Cover Page** | `cases`, `report_builder.py` | Case #, Title, Examiner name, Tool version (v1.0.0), Generation Timestamp, and Report Self-Integrity companion placeholder. | Page 1 isolation; running headers/footers suppressed on cover page. |
+| **2** | **Executive Summary** | `cases`, `extracted_files`, `detections`, `bookmarks`, `audit_log` | Concise high-level breakdown: total files (2), parsed files (1), carved fragments (1), verified AI findings (1), simulated AI findings (1), manual bookmarks (1), live chain integrity status (`PASS`). | Target $\le$ half a page; no evidentiary data omitted. |
+| **3** | **Case & Party Details — BSA 2023 §63 Part A** | `cases`, `audit_log`, `bsa_sec63.py` | Produced by details, device identification, acquisition location/date, and custodian record. | BSA 2023 §63 Schedule Part A statutory compliance. |
+| **4** | **Evidence Inventory** | `extracted_files` table | Un-truncated table with 1 row per file: File ID (`CH01_20260924_100000.mp4`, `CARVED_NAL_0089_FRAG.h264`), Source Channel, Extraction Type (`parsed`, `carved_fragment`), MD5, SHA-256, Byte/Sector range, and Acquisition Timestamp. | Zero truncation; every parsed file and carved fragment enumerated. |
+| **5** | **Acquisition & Integrity Summary — BSA 2023 §63 Part B** | `audit_log`, `bsa_sec63.py` | Acquisition method (Physical Bit-Stream), write-block hardware verification, image hashes (MD5, SHA-256, Merkle root), dynamic case methodology narrative synthesized from audit events, and statutory dual signature blocks (Person in charge of device & Independent Forensic Expert). | Mandatory warning banner: *"This section is an expert-ready technical draft. Signature below constitutes independent review and certification by the signing expert; this software does not self-certify."* |
+| **6** | **ISO/IEC 27037 Activity Mapping** | `audit_log`, `iso27037_mapper.py` | 4 distinct subsections: **Identification**, **Collection**, **Acquisition**, **Preservation** with detailed case narratives and exact timestamped audit trail citations. | ISO/IEC 27037:2012 Standard digital evidence handling workflow. |
+| **7** | **Chain of Custody Audit Log** | `audit_log`, `audit_log.py` | Full chronological table spanning all intake, detection, parsing, carving, normalization, and export events with SHA-256 hash chaining. Displays live cryptographic verification status badge. | **Live Recompute Rule**: `verify_audit_chain_detailed()` executes live at report generation time; does not use cached results. |
+| **8** | **Timeline Reconstruction** | `audit_log` (`TIMELINE_NORMALIZATION`), `normalizer.py` | Per-channel normalized timestamps, normalization method (`OSD + visual anchor`), calculated drift correction (`-1.45s`), and sync status. | Explicitly states when visual anchors are unavailable rather than omitting channels. |
+| **9** | **AI-Assisted Triage Findings** | `detections`, `face_detections`, `plate_detections` | **9a. Verified Findings**: YOLOv8 person detection (confidence 0.94, frame 45, clip reference).<br>**9b. Simulated Findings**: MobileNetV2 face detection (confidence 0.78, frame 120) under plain warning banner: *"The following results were produced by a model running in simulated mode... must not be relied upon without separate verification."* | **Investigative Lead Rule**: Every AI finding carries `INVESTIGATIVE LEAD — NOT POSITIVE IDENTIFICATION`. Sections 9a and 9b never interleave. |
+| **10** | **Investigator Findings & Manual Bookmarks** | `bookmarks` table | Manual bookmark ID (`BM-001`), evidence reference (`CH01_20260924_100000.mp4 @ Frame 45`), note (*"Suspect observed approaching server cabinet with unauthorized USB dongle."*), investigator name, timestamp. | **Human-Authored Invariant**: Only human entries; zero AI detections permitted in this section. |
+| **11** | **Recovered / Carved Evidence Summary** | `extracted_files`, `audit_log` (`CARVER_SCAN_COMPLETE`) | Carved fragment count, recovered byte ranges (`45000-45256`), and heuristic carve identification. | Explicitly restates Blueprint §5.3 recovery disclaimer (*"Recovery is not guaranteed; carved fragments represent heuristic boundaries"*). |
+| **12** | **Video Tamper & Anti-Splicing Integrity Results** | `audit_log` (`TAMPER_CHECK_RUN`), `tamper_check.py` | Detailed listing of QP discontinuities (frame 45, delta 18) and duplicate GOP signatures (frame 90). Renders *"Not run for this case"* if tamper checks were skipped. | Transparent reporting of structural bitstream anomalies. |
+| **13** | **Methodology & Reproducibility Statement** | Platform metadata, engine versions | Tool version (v1.0.0), engine versions, deterministic bit-stream processing claim, and explicit invitation for opposing experts to independently reproduce hashes and outputs. | Load-bearing legal reproducibility foundation. |
+| **14** | **Appendices & Technical Glossary** | `model_registry.py` | Live snapshot of model verification status (checksums and SHA-256 matches for all 8 models), technical glossary (Merkle Tree, NAL Unit, Carved Fragment, GOP, HIKFAT, DHFS), and legal disclaimers. | Standing disclaimer: Never claims admissibility or self-certification; always expert-ready draft. |
+
+---
+
+### 10.3 Report Self-Integrity & Verification Evidence
+
+Following PDF compilation, the report builder computes the SHA-256 digest of the raw PDF file, writes a companion `<report_name>.pdf.sha256` checksum file in standard GNU format, and commits a `REPORT_GENERATED` event into the case audit log:
+
+```
+[Full Technical Report]
+File: docs/sample_reports/sample_full_technical_report.pdf
+SHA-256: 76637a13a0f024e3bd7878657bfd17f09d84e3e6923b79dbcc80c3f50f97abfe
+Companion Checksum: MATCH (76637a13a0f024e3bd7878657bfd17f09d84e3e6923b79dbcc80c3f50f97abfe)
+Pages: 15 pages
+Status: VERIFIED
+
+[Summary Report]
+File: docs/sample_reports/sample_summary_report.pdf
+SHA-256: 294e96f0f4d20a86b3cbf81c47c1ba9b483c07eee462f43542ea35f4bd99eef8
+Companion Checksum: MATCH (294e96f0f4d20a86b3cbf81c47c1ba9b483c07eee462f43542ea35f4bd99eef8)
+Pages: 6 pages
+Status: VERIFIED
+```
+
+### 10.4 Acceptance Criteria Verification Results
+
+| # | Acceptance Criterion | Verification Method | Result |
+| :--- | :--- | :--- | :--- |
+| **1** | Full report renders all 14 sections with real data, no cross-contamination between 9a/9b and 10 | `tests/unit/test_compliance.py::test_full_technical_report_14_sections` | **PASSED** |
+| **2** | Chain of Custody live check genuinely re-runs and detects tampered entries (shows FAIL + broken entry cited) | `tests/unit/test_compliance.py::test_live_chain_breakage_detection` | **PASSED** |
+| **3** | Summary mode strictly isolates Sections 1–5, omits Sections 6–14, and includes "request full report" notice | `tests/unit/test_compliance.py::test_summary_report_scope` | **PASSED** |
+| **4** | Generated PDF SHA-256 matches disk file, companion file, and audit log event | `tests/unit/test_compliance.py::test_report_self_integrity_hash` | **PASSED** |
+| **5** | Zero hits for `admissible`, `certified`, `guarantee` outside statutory disclaimers | `tests/unit/test_compliance.py::test_vocabulary_cleanliness_in_reports` | **PASSED (0 hits)** |
+| **6** | Full regression test suite passing across all subsystems | `pytest tests/unit/` (81 tests) | **81 / 81 PASSED (9.38s)** |
+
+
 

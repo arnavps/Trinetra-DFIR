@@ -131,3 +131,34 @@ def test_bottom_proof_of_life_panel_resizability_and_tabs(qapp):
 
     window.close()
 
+
+def test_jobs_panel_expansion_on_laptop_screen_resolutions(qapp):
+    window = MainWindow()
+    # Test typical laptop / constrained height (700px)
+    window.resize(1280, 700)
+    window.show()
+    qapp.processEvents()
+
+    # Expand via toggle button
+    window.jobs_panel.btn_toggle.click()
+    qapp.processEvents()
+
+    # Must expand to readable workstation height (>= 180px), never squished to 64px sliver
+    assert window.jobs_panel._is_expanded is True
+    assert window.jobs_panel.height() >= 180
+    assert window.jobs_panel.log_table.height() >= 80
+
+    # User can drag splitter higher (e.g. 320px)
+    window.content_v_splitter.setSizes([window.content_v_splitter.height() - 320, 320])
+    window._on_content_splitter_moved(window.content_v_splitter.height() - 320, 1)
+    qapp.processEvents()
+    assert window.jobs_panel.height() >= 300
+
+    # Toggle collapse
+    window.jobs_panel.btn_toggle.click()
+    qapp.processEvents()
+    assert window.jobs_panel._is_expanded is False
+    assert window.jobs_panel.height() <= 50
+
+    window.close()
+

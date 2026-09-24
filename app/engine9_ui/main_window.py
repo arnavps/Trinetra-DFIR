@@ -18,7 +18,8 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QListWidget, QListWidgetItem, QStackedWidget,
     QTreeWidget, QTreeWidgetItem, QLabel, QSplitter,
-    QMenuBar, QMenu, QStatusBar, QMessageBox
+    QMenuBar, QMenu, QStatusBar, QMessageBox,
+    QScrollArea, QFrame
 )
 
 from app.engine9_ui.case_session import CaseSession
@@ -261,7 +262,8 @@ class MainWindow(QMainWindow):
         self.main_splitter.addWidget(sidebar_widget)
 
         # 3. Center Stacked Pages
-        self.stack = QStackedWidget(self.main_splitter)
+        self.stack = QStackedWidget()
+        self.stack.setMinimumHeight(100)
 
         self.page1 = Page1Intake(self.session, self.stack)
         self.page2 = Page2Acquisition(self.session, self.stack)
@@ -297,10 +299,55 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.page11)
         self.stack.addWidget(self.page12)
 
-        self.main_splitter.addWidget(self.stack)
+        # Responsive Scroll Area wrapping the pages so bottom panel expansion is never blocked by page minimum heights
+        self.stack_scroll = QScrollArea(self.main_splitter)
+        self.stack_scroll.setWidgetResizable(True)
+        self.stack_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.stack_scroll.setStyleSheet(f"""
+            QScrollArea {{
+                background-color: transparent;
+                border: none;
+            }}
+            QScrollBar:vertical {{
+                background-color: #0D1117;
+                width: 8px;
+                border-radius: 4px;
+            }}
+            QScrollBar::handle:vertical {{
+                background-color: #30363D;
+                min-height: 20px;
+                border-radius: 4px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background-color: {DFIR_DARK_THEME['accent_blue']};
+            }}
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+                height: 0px;
+            }}
+            QScrollBar:horizontal {{
+                background-color: #0D1117;
+                height: 8px;
+                border-radius: 4px;
+            }}
+            QScrollBar::handle:horizontal {{
+                background-color: #30363D;
+                min-width: 20px;
+                border-radius: 4px;
+            }}
+            QScrollBar::handle:horizontal:hover {{
+                background-color: {DFIR_DARK_THEME['accent_blue']};
+            }}
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
+                width: 0px;
+            }}
+        """)
+        self.stack_scroll.setWidget(self.stack)
+
+        self.main_splitter.addWidget(self.stack_scroll)
         self.main_splitter.setStretchFactor(0, 0)
         self.main_splitter.setStretchFactor(1, 1)
         self.main_splitter.setSizes([380, 1100])
+        self.main_splitter.setMinimumHeight(120)
 
         self.content_v_splitter.addWidget(self.main_splitter)
 
@@ -311,7 +358,7 @@ class MainWindow(QMainWindow):
 
         self.content_v_splitter.setStretchFactor(0, 1)
         self.content_v_splitter.setStretchFactor(1, 0)
-        self.content_v_splitter.setSizes([750, 48])
+        self.content_v_splitter.setSizes([750, 44])
         self.content_v_splitter.splitterMoved.connect(self._on_content_splitter_moved)
 
         root_v_layout.addWidget(self.content_v_splitter)
@@ -417,11 +464,11 @@ class MainWindow(QMainWindow):
         sizes = self.content_v_splitter.sizes()
         if len(sizes) >= 2:
             bottom_h = sizes[1]
-            if bottom_h > 75 and not self.jobs_panel._is_expanded:
-                self.jobs_panel.set_expanded(True, adjust_splitter=False)
-            elif bottom_h <= 52 and self.jobs_panel._is_expanded:
-                self.jobs_panel.set_expanded(False, adjust_splitter=False)
-            elif bottom_h > 75 and self.jobs_panel._is_expanded:
+            if bottom_h > 70 and not self.jobs_panel._is_expanded:
+                self.jobs_panel.set_expanded(True, adjust_splitter=True)
+            elif bottom_h <= 55 and self.jobs_panel._is_expanded:
+                self.jobs_panel.set_expanded(False, adjust_splitter=True)
+            elif bottom_h >= 150 and self.jobs_panel._is_expanded:
                 self.jobs_panel._last_expanded_height = bottom_h
 
     def _on_event_logged(self, event_data: dict):

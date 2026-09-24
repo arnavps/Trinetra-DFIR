@@ -35,9 +35,9 @@ class JobsPanel(QWidget):
         self.session = session
         self.job_manager = JobManager.instance()
         self._is_expanded = False
-        self._last_expanded_height = 220
+        self._last_expanded_height = 240
         self._row_map: Dict[str, int] = {}  # job_id -> table row
-        self.setMinimumHeight(42)
+        self.setMinimumHeight(44)
 
         self.init_ui()
         self._wire_signals()
@@ -102,13 +102,14 @@ class JobsPanel(QWidget):
 
         # Expand / Collapse toggle button
         self.btn_toggle = QPushButton("▲ Proof-of-Life & Jobs (0)", self.bar_frame)
+        self.btn_toggle.setMinimumWidth(170)
         self.btn_toggle.setStyleSheet(f"""
             QPushButton {{
                 background-color: #21262D;
                 color: #C9D1D9;
                 border: 1px solid {DFIR_DARK_THEME['border_color']};
                 border-radius: 3px;
-                padding: 3px 8px;
+                padding: 3px 10px;
                 font-family: 'Segoe UI', sans-serif;
                 font-size: 11px;
                 font-weight: bold;
@@ -125,6 +126,7 @@ class JobsPanel(QWidget):
 
         # 2. Expanded Queue Table & Proof-of-Life Tabs (collapsible & vertically resizable)
         self.queue_frame = QFrame(self)
+        self.queue_frame.setMinimumHeight(150)
         self.queue_frame.setStyleSheet(f"""
             QFrame {{
                 background-color: {DFIR_DARK_THEME['panel_bg']};
@@ -138,6 +140,7 @@ class JobsPanel(QWidget):
 
         # Tabs for Jobs Queue vs Proof-of-Life Event Stream
         self.tabs = QTabWidget(self.queue_frame)
+        self.tabs.setMinimumHeight(140)
         self.tabs.setStyleSheet(f"""
             QTabWidget::pane {{
                 border: 1px solid {DFIR_DARK_THEME['border_color']};
@@ -202,7 +205,7 @@ class JobsPanel(QWidget):
                 padding: 4px;
             }}
         """)
-        self.table.setMinimumHeight(80)
+        self.table.setMinimumHeight(100)
         tab_jobs_layout.addWidget(self.table)
         self.tabs.addTab(tab_jobs, "⚡ Jobs Queue (0)")
 
@@ -289,7 +292,7 @@ class JobsPanel(QWidget):
                 padding: 4px;
             }}
         """)
-        self.log_table.setMinimumHeight(80)
+        self.log_table.setMinimumHeight(100)
         tab_log_layout.addWidget(self.log_table)
 
         self.tabs.addTab(tab_log, "📜 Proof-of-Life Stream (0)")
@@ -315,6 +318,12 @@ class JobsPanel(QWidget):
         self.queue_frame.setVisible(self._is_expanded)
         self._update_toggle_button_text()
 
+        if expanded:
+            self.setMinimumHeight(180)
+            self.setMaximumHeight(16777215)
+        else:
+            self.setMinimumHeight(44)
+
         if adjust_splitter:
             splitter = self.parentWidget()
             if isinstance(splitter, QSplitter):
@@ -322,11 +331,13 @@ class JobsPanel(QWidget):
                 if len(sizes) == 2:
                     total_h = sum(sizes)
                     if expanded:
-                        target_bottom = max(200, self._last_expanded_height)
-                        target_top = max(150, total_h - target_bottom)
+                        target_bottom = max(240, self._last_expanded_height)
+                        if total_h - target_bottom < 150:
+                            target_bottom = max(180, total_h - 150)
+                        target_top = max(100, total_h - target_bottom)
                         splitter.setSizes([target_top, target_bottom])
                     else:
-                        if sizes[1] > 70:
+                        if sizes[1] >= 150:
                             self._last_expanded_height = sizes[1]
                         collapsed_h = 44
                         splitter.setSizes([total_h - collapsed_h, collapsed_h])

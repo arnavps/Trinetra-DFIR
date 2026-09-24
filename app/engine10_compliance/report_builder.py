@@ -123,9 +123,19 @@ def build_json_report(db_path: str, case_id: str, session: Optional[Any] = None)
         if getattr(session, "evidence_source", None):
             case_info["evidence_source"] = session.evidence_source
         if getattr(session, "acquisition_result", None):
-            case_info["sha256"] = session.acquisition_result.sha256
-            case_info["md5"] = session.acquisition_result.md5
-            case_info["acquisition_method"] = session.acquisition_result.acquisition_type
+            acq_res = session.acquisition_result
+            case_info["sha256"] = acq_res.sha256
+            case_info["md5"] = acq_res.md5
+            method = getattr(acq_res, "acquisition_type", None)
+            if not method:
+                ext = os.path.splitext(acq_res.path)[1].lower() if acq_res.path else ""
+                if ext in [".e01", ".ewf"]:
+                    method = "Expert Witness Format (E01)"
+                elif ext in [".dd", ".raw", ".img"]:
+                    method = "Physical Bit-Stream Image (.dd/.raw)"
+                else:
+                    method = "Physical Sector Bit-stream Acquisition"
+            case_info["acquisition_method"] = method
 
     # Audit log
     cursor.execute(
@@ -627,8 +637,9 @@ def generate_case_report_pdf(
     part_b_data = generate_bsa_sec63_part_b(case_info, files, audit_entries, chain_status)
 
     story.append(Paragraph("<b>5.1 Technical Acquisition Parameters</b>", subsec_heading_style))
+    acq_method_display = case_info.get("acquisition_method") or "Hardware/Software Write-Blocked Bit-Stream Raw Read"
     b_tech_data = [
-        [Paragraph("<b>Acquisition Method:</b>", body_style), Paragraph("Hardware/Software Write-Blocked Bit-Stream Raw Read", body_style)],
+        [Paragraph("<b>Acquisition Method:</b>", body_style), Paragraph(acq_method_display, body_style)],
         [Paragraph("<b>Write-Block Status:</b>", body_style), Paragraph("Enforced (ReadOnlyHandle - zero drive write transactions)", body_style)],
         [Paragraph("<b>Tool Version:</b>", body_style), Paragraph("Tri-Netra DFIR Workstation v1.0.0", body_style)],
         [Paragraph("<b>Primary Image SHA-256:</b>", body_style), Paragraph(part_b_data["sha256"], code_style)],

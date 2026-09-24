@@ -337,3 +337,38 @@ def test_legal_vocabulary_cleanliness(populated_case_db, tmp_path):
     assert "admissible" not in cleaned_lower, "Found forbidden term 'admissible' in report text!"
     assert "certified" not in cleaned_lower, "Found forbidden term 'certified' in report text!"
     assert "guarantee" not in cleaned_lower, "Found forbidden term 'guarantee' in report text!"
+
+
+def test_report_generation_with_active_session_acquisition_result(populated_case_db, tmp_path):
+    """
+    Confirms report generation succeeds cleanly when CaseSession contains an active
+    AcquisitionResult (verifies acquisition_method and hash extraction without AttributeError).
+    """
+    from app.engine9_ui.case_session import CaseSession
+    from app.engine1_acquisition.acquirer import AcquisitionResult
+
+    db_path, case_id = populated_case_db
+    session = CaseSession()
+    session.case_id = case_id
+    session.db_path = db_path
+
+    acq = AcquisitionResult(
+        path="evidence.raw",
+        md5="1234567890abcdef1234567890abcdef",
+        sha256="abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+        merkle_root="abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+        byte_count=2048,
+        started_at="2026-09-24 10:00:00",
+        finished_at="2026-09-24 10:01:00",
+        write_blocked=True,
+    )
+    session.set_acquisition_result(acq)
+
+    pdf_out = str(tmp_path / "Session_Acq_Report.pdf")
+    report_builder.generate_case_report_pdf(db_path, case_id, pdf_out, mode="full", session=session)
+    assert os.path.exists(pdf_out)
+
+    reader = PdfReader(pdf_out)
+    full_text = "\n".join(p.extract_text() for p in reader.pages)
+    assert "Physical Bit-Stream Image (.dd/.raw)" in full_text
+

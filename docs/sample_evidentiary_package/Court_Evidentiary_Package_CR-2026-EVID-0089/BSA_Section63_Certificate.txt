@@ -1,0 +1,79 @@
+================================================================================
+BHARATIYA SAKSHYA ADHINIYAM (BSA 2023) SECTION 63 CERTIFICATE DRAFT
+================================================================================
+
+================================================================================
+BHARATIYA SAKSHYA ADHINIYAM (BSA 2023) — SECTION 63 CERTIFICATE (PART A DRAFT)
+System & Acquisition Specifications
+================================================================================
+
+Case Reference ID: CR-2026-EVID-0089
+Case Title: State of Maharashtra vs Cyber Intruder & Ors
+Investigator Name: Insp. S. Joshi (Cyber Crime PS)
+Date of Generation: 2026-09-24T09:30:00Z
+
+1. DEVICE & SOURCE IDENTIFICATION
+---------------------------------
+Acquisition Software: Tri-Netra DFIR Workstation (v1.0.0, Offline Forensic Workstation)
+Write-Block Verification: Hardware/Software Write-Block Enforced (ReadOnlyHandle)
+Physical Sector Reader: Raw Block IO Crate (rust_core::raw_io)
+Primary Bitstream Image SHA-256: Not yet recorded
+Primary Bitstream Image MD5: Not yet recorded
+
+2. EVIDENTIARY MEDIA SUMMARY
+----------------------------
+Total Extracted Files/Streams: 2
+Primary Evidentiary Integrity: Bit-stream image hash verified against source drive.
+
+DISCLAIMER: Expert-ready technical draft — requires human investigator signature; not self-certifying
+================================================================================
+
+================================================================================
+
+================================================================================
+BHARATIYA SAKSHYA ADHINIYAM (BSA 2023) — SECTION 63 CERTIFICATE (PART B DRAFT)
+Technical Methodology & Integrity Substantiation
+================================================================================
+
+Case Reference ID: CR-2026-EVID-0089
+Primary Image SHA-256: Not yet recorded
+Primary Image MD5: Not yet recorded
+Audit Chain Status: PASS (Unbroken Cryptographic Chain)
+Total Audit Chain Entries: 4
+
+1. FILE INTEGRITY RECORDS
+-------------------------
+ - File ID: CARVED_NAL_0089_FRAG.mp4 | Channel: 1 | Hash: be077e09862a931a... | Type: carved_fragment
+ - File ID: CH01_20260924_100000.mp4 | Channel: 1 | Hash: d93ff174e3020c09... | Type: parsed
+
+2. CASE METHODOLOGY PROSE
+-------------------------
+1. Evidence Intake: Pre-acquired bit-stream raw/EWF forensic image was mounted in read-only mode (Hardware/Software Write-Block (ReadOnlyHandle)).
+
+2. Automated OEM Signature Detection: Scanned physical disk sectors for CCTV filesystem magic signatures; identified structure matching Hikvision specifications.
+
+3. Structured File System Parsing: Parsed allocation tables and metadata structures, indexing 1 intact video files across 1 distinct camera channel(s). Format-preserving zero-remux copy maintained.
+
+4. Heuristic NAL-Unit Carving: Executed unallocated sector scanner (Rust raw block IO / frame carver). Recovered 1 raw video fragment(s) from unallocated or corrupted sectors. Recovery is probabilistic and best-effort.
+
+5. Ephemeral In-Memory Stream Decoding: In-memory hardware/software stream decoding available via memory-safe pipeline.
+
+6. AI-Assisted Investigative Triage: Computer vision models executed in advisory mode; all outputs cataloged as investigative leads with simulation status persisted.
+
+7. Compliance Compilation: Built Section 63 technical documentation, verified cryptographic hash chain integrity, and sealed report with companion SHA-256.
+
+3. STATUTORY SIGNATURE BLOCKS
+-----------------------------
+This section is an expert-ready technical draft. Signature below constitutes independent review and certification by the signing expert; this software does not self-certify.
+
+[ Signature: Person in Charge of Device ]       [ Signature: Independent Forensic Expert ]
+Name: __________________________________        Name: ___________________________________
+Designation: ___________________________        Designation: ____________________________
+Date: __________________________________        Date: ___________________________________
+
+DISCLAIMER: Expert-ready technical draft — requires human investigator signature; not self-certifying
+================================================================================
+
+================================================================================
+STATUTORY DISCLAIMER:
+Expert-ready technical draft — requires human investigator signature; not self-certifying

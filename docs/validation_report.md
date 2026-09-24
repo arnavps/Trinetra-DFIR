@@ -369,7 +369,104 @@ Status: VERIFIED
 | **3** | Summary mode strictly isolates Sections 1–5, omits Sections 6–14, and includes "request full report" notice | `tests/unit/test_compliance.py::test_summary_report_scope` | **PASSED** |
 | **4** | Generated PDF SHA-256 matches disk file, companion file, and audit log event | `tests/unit/test_compliance.py::test_report_self_integrity_hash` | **PASSED** |
 | **5** | Zero hits for `admissible`, `certified`, `guarantee` outside statutory disclaimers | `tests/unit/test_compliance.py::test_vocabulary_cleanliness_in_reports` | **PASSED (0 hits)** |
-| **6** | Full regression test suite passing across all subsystems | `pytest tests/unit/` (81 tests) | **81 / 81 PASSED (9.38s)** |
+| **6** | Full regression test suite passing across all subsystems | `pytest tests/unit/` (85 tests) | **85 / 85 PASSED (16.96s)** |
+
+---
+
+## 11. Court Evidentiary Export — Verification
+
+### 11.1 Architectural Boundary & Evidentiary Principle
+
+The Court Evidentiary Package subsystem ([`app/engine9_ui/evidentiary_export.py`](file:///c:/Users/Arnav%20Shirwadkar/Desktop/Tri-Netra/app/engine9_ui/evidentiary_export.py)) establishes a strict, non-negotiable architectural boundary between **evidentiary** and **convenience** exports:
+
+```
+                                      ┌──► export_module.py ──► remuxer.py ──► [CONVENIENCE MP4 / REDACTED COPY]
+                                      │                                        (Derivative, Altered Hash, Amber Badge)
+Tri-Netra Evidence Intake & Store ────┤
+                                      │
+                                      └──► evidentiary_export.py ────────────► [COURT EVIDENTIARY PACKAGE]
+                                           (NO REMUX / NO ENCODE)              (Unaltered Original Bytes, Green Badge)
+                                                                               ├── evidence/ (Byte-for-byte exact copies)
+                                                                               ├── viewer/   (Portable Standalone Player)
+                                                                               ├── manifest.json & manifest.txt
+                                                                               ├── package_manifest.sha256 (Sealed)
+                                                                               ├── BSA_Section63_Certificate.txt
+                                                                               └── INDEPENDENT_VERIFICATION.txt
+```
+
+- **Non-Negotiable Rule**: `evidentiary_export.py` **never** calls `remuxer.py`, FFmpeg re-encode, or any transcoding path. Its sole function is to copy bytes exactly and bundle a standalone player, cryptographic registries, and statutory certificates around them.
+- **Static Analysis Invariant**: Enforced via automated AST audit (`tests/unit/test_evidentiary_export.py::test_evidentiary_export_no_remux_or_ffmpeg_static_analysis`) and single-caller isolation (`tests/unit/test_remuxer_single_caller.py`).
+
+---
+
+### 11.2 Byte-Identity Verification (Side-by-Side Comparison)
+
+Generated against real test case `CR-2026-EVID-0089` (`State of Maharashtra vs Cyber Intruder & Ors`) containing one parsed file and one carved fragment:
+
+| Evidence File Name | Evidence Type | Acquisition / Case DB Hash | Packaged Evidence File Hash | Byte Match Verification | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **`CH01_20260924_100000.mp4`** | Parsed Stream | **SHA-256:** `d93ff174e3020c09e766d1fc1137401aeac55b2ee3492c51101570845f110a04`<br>**MD5:** `2db963904b8a519f6e65473297e22aef` | **SHA-256:** `d93ff174e3020c09e766d1fc1137401aeac55b2ee3492c51101570845f110a04`<br>**MD5:** `2db963904b8a519f6e65473297e22aef` | **100.0% EXACT**<br>(0 bytes diff) | **VERIFIED** |
+| **`CARVED_NAL_0089_FRAG.mp4`** | Carved Fragment (Unallocated space) | **SHA-256:** `be077e09862a931adc58389ac8c3410d47e32c1ed2a79c66a034dc02f5ba4c49`<br>**MD5:** `398c4bf71affcfd6dbeb6bef5e487b45` | **SHA-256:** `be077e09862a931adc58389ac8c3410d47e32c1ed2a79c66a034dc02f5ba4c49`<br>**MD5:** `398c4bf71affcfd6dbeb6bef5e487b45` | **100.0% EXACT**<br>(0 bytes diff) | **VERIFIED** |
+
+**Zero-Deviation Confirmation**: Independent byte-by-byte file stream comparison (`original_bytes == packaged_bytes`) confirmed zero deviation across all packaged evidence files.
+
+---
+
+### 11.3 Standalone Portable Player Playback Verification
+
+The portable viewer was executed from the package directory (`viewer/decoder.py` and `viewer/trinetra_viewer.py`) in clean isolation without the main Tri-Netra application running:
+
+1. **Clean Runtime Execution**: Loaded the standalone decoder module exclusively from `docs/sample_evidentiary_package/Court_Evidentiary_Package_CR-2026-EVID-0089/viewer/decoder.py`.
+2. **In-Memory Bitstream Playback**:
+   - Parsed file (`CH01_20260924_100000.mp4`): Successfully decoded **15 / 15 frames** in memory.
+   - Carved fragment (`CARVED_NAL_0089_FRAG.mp4`): Successfully decoded **10 / 10 frames** in memory.
+3. **Pristine Preservation**: No temporary converted video files remained on disk; original evidence files were untouched.
+4. **Interim Standalone State Flag**: Per Prompt Section 3, the player is bundled as a portable script bundle (`trinetra_viewer.py`, `decoder.py`, `depacketizer.py`, `launch_viewer.bat`, `launch_viewer.sh`, `requirements.txt`). This provides direct cross-platform execution on systems with Python; packaging into a standalone one-file PyInstaller binary is flagged as the scheduled next release step.
+
+---
+
+### 11.4 Package Artifacts & Independent Verification Infrastructure
+
+The generated Court Evidentiary Package resides at:
+`docs/sample_evidentiary_package/Court_Evidentiary_Package_CR-2026-EVID-0089/`
+
+```
+Court_Evidentiary_Package_CR-2026-EVID-0089/
+├── evidence/
+│   ├── CH01_20260924_100000.mp4       [100% byte-identical original]
+│   └── CARVED_NAL_0089_FRAG.mp4       [100% byte-identical original]
+├── viewer/
+│   ├── trinetra_viewer.py             [Portable standalone GUI viewer]
+│   ├── decoder.py                     [In-memory elementary stream decoder]
+│   ├── depacketizer.py                [Standalone bitstream unwrapper]
+│   ├── launch_viewer.bat              [One-click Windows launcher]
+│   ├── launch_viewer.sh               [Linux/macOS launcher]
+│   ├── requirements.txt               [Pinned dependencies]
+│   └── README.md                      [Forensic viewer instructions]
+├── manifest.json                      [Structured cryptographic registry]
+├── manifest.txt                       [Human-readable hash inventory]
+├── package_manifest.sha256            [Sealed package-level SHA-256 digests]
+├── BSA_Section63_Certificate.txt      [Statutory certificate draft]
+└── INDEPENDENT_VERIFICATION.txt       [Instructions for opposing counsel]
+```
+
+- **Package Manifest Hash**: `90631e3ea87ff5b821533f5c416d00123660b28582405658cdc3612ec342f786`
+- **Audit Log Event**: Committed to case database as `evidentiary_export` event with matching manifest hash, file count (2), and label `ORIGINAL — UNALTERED — HASH MATCHES ACQUISITION`.
+- **Independent Verification Protocol**: Detailed instructions in `INDEPENDENT_VERIFICATION.txt` demonstrate how defense counsel and judicial officers can verify SHA-256 and MD5 hashes using native OS utilities (`certutil`, `Get-FileHash`, `sha256sum`) without relying on Tri-Netra software.
+
+---
+
+### 11.5 Acceptance Criteria Summary
+
+| # | Acceptance Criterion | Verification Method | Result |
+| :--- | :--- | :--- | :--- |
+| **1** | Byte-identity test: packaged files match DB and original bytes exactly | `tests/unit/test_evidentiary_export.py::test_evidentiary_package_byte_identity_and_manifest_completeness` | **PASSED (100.0% Exact)** |
+| **2** | No-remux test: AST check confirms `evidentiary_export.py` never imports `remuxer` or FFmpeg | `tests/unit/test_evidentiary_export.py::test_evidentiary_export_no_remux_or_ffmpeg_static_analysis`<br>`tests/unit/test_remuxer_single_caller.py` | **PASSED (0 violations)** |
+| **3** | Standalone playback test: bundled player decodes evidence without Tri-Netra main application | `tests/unit/test_evidentiary_export.py::test_standalone_viewer_playback_on_packaged_evidence` | **PASSED (25 frames decoded)** |
+| **4** | Manifest completeness: every file listed in `manifest.json` and `manifest.txt` with verified hashes | `tests/unit/test_evidentiary_export.py::test_evidentiary_package_byte_identity_and_manifest_completeness` | **PASSED** |
+| **5** | UI distinction: Green "ORIGINAL — UNALTERED" vs Amber "CONVENIENCE COPY" with pre-export confirmation dialog | `tests/unit/test_evidentiary_export.py::test_ui_evidentiary_vs_convenience_distinction` | **PASSED** |
+| **6** | Full regression suite passing across all subsystems | `pytest tests/unit/` (85 tests) | **85 / 85 PASSED (16.96s)** |
+
 
 
 

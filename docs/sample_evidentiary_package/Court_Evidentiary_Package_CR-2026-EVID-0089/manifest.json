@@ -1,0 +1,40 @@
+{
+  "court_evidentiary_package": {
+    "version": "1.0.0",
+    "export_timestamp": "2026-09-24T08:13:39.653158+00:00",
+    "label": "ORIGINAL \u2014 UNALTERED \u2014 HASH MATCHES ACQUISITION",
+    "case": {
+      "case_id": "CR-2026-EVID-0089",
+      "case_name": "State of Maharashtra vs Cyber Intruder & Ors",
+      "investigator": "Insp. S. Joshi (Cyber Crime PS)",
+      "created_at": "2026-09-24T09:30:00Z"
+    },
+    "total_files": 2,
+    "files": [
+      {
+        "file_id": "CARVED_NAL_0089_FRAG.mp4",
+        "channel_id": 1,
+        "extraction_type": "carved_fragment",
+        "size_bytes": 23587,
+        "storage_path": "Unallocated Cluster 45000-45256",
+        "start_timestamp": "Heuristic Recovery",
+        "end_timestamp": "Unallocated Space",
+        "md5": "398c4bf71affcfd6dbeb6bef5e487b45",
+        "sha256": "be077e09862a931adc58389ac8c3410d47e32c1ed2a79c66a034dc02f5ba4c49",
+        "relative_path": "evidence/CARVED_NAL_0089_FRAG.mp4"
+      },
+      {
+        "file_id": "CH01_20260924_100000.mp4",
+        "channel_id": 1,
+        "extraction_type": "parsed",
+        "size_bytes": 27434,
+        "storage_path": "docs\\sample_evidentiary_package\\case_data\\extracted\\CH01_20260924_100000.mp4",
+        "start_timestamp": "2026-09-24 10:00:00",
+        "end_timestamp": "2026-09-24 10:30:00",
+        "md5": "2db963904b8a519f6e65473297e22aef",
+        "sha256": "d93ff174e3020c09e766d1fc1137401aeac55b2ee3492c51101570845f110a04",
+        "relative_path": "evidence/CH01_20260924_100000.mp4"
+      }
+    ]
+  }
+}

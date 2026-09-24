@@ -177,14 +177,16 @@ def generate_bsa_sec63_part_b(
 def generate_bsa_sec63_cert_draft(
     case_info: Dict[str, Any],
     extracted_files: List[Dict[str, Any]],
-    audit_chain: List[Dict[str, Any]],
+    audit_chain: Optional[List[Dict[str, Any]]] = None,
+    audit_log: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
     Legacy and text preview wrapper generating draft Part A & Part B technical text
     under BSA 2023 Section 63.
     """
+    actual_audit = audit_chain if audit_chain is not None else (audit_log or [])
     part_a_data = generate_bsa_sec63_part_a(case_info, extracted_files)
-    part_b_data = generate_bsa_sec63_part_b(case_info, extracted_files, audit_chain)
+    part_b_data = generate_bsa_sec63_part_b(case_info, extracted_files, actual_audit)
 
     file_summary_lines = []
     for f in extracted_files:

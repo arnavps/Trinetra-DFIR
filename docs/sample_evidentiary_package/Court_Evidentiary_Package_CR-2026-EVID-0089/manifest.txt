@@ -1,0 +1,17 @@
+====================================================================================================
+  TRI-NETRA DFIR -- COURT EVIDENTIARY PACKAGE HASH MANIFEST
+  ORIGINAL -- UNALTERED -- HASH MATCHES ACQUISITION
+====================================================================================================
+Case Number:      CR-2026-EVID-0089
+Case Name:        State of Maharashtra vs Cyber Intruder & Ors
+Investigator:     Insp. S. Joshi (Cyber Crime PS)
+Export Timestamp: 2026-09-24 08:13:39 UTC
+Total Files:      2
+====================================================================================================
+File ID                      Type             Size (B)   MD5                                SHA-256
+----------------------------------------------------------------------------------------------------
+CARVED_NAL_0089_FRAG.mp4     carved_fragment  23587      398c4bf71affcfd6dbeb6bef5e487b45   be077e09862a931adc58389ac8c3410d47e32c1ed2a79c66a034dc02f5ba4c49
+  └── Byte / Sector Span: Unallocated Cluster 45000-45256
+CH01_20260924_100000.mp4     parsed           27434      2db963904b8a519f6e65473297e22aef   d93ff174e3020c09e766d1fc1137401aeac55b2ee3492c51101570845f110a04
+  └── Byte / Sector Span: docs\sample_evidentiary_package\case_data\extracted\CH01_20260924_100000.mp4
+====================================================================================================

@@ -1,0 +1,59 @@
+================================================================================
+  TRI-NETRA DFIR -- COURT EVIDENTIARY PACKAGE
+  INDEPENDENT CRYPTOGRAPHIC VERIFICATION INSTRUCTIONS
+================================================================================
+
+TO: Defense Counsel, Forensic Examiners, and Judicial Officers
+RE: Evidence Package for Case: CR-2026-EVID-0089 (State of Maharashtra vs Cyber Intruder & Ors)
+DATE OF EXPORT: 2026-09-24 08:13:39 UTC
+
+GENERAL FORENSIC DISCLOSURE:
+All video evidence files contained in the 'evidence/' directory of this package
+are byte-for-byte exact copies of the originally acquired digital video evidence
+or heuristically carved elementary streams. No re-encoding, transcoding, or
+container conversion has been performed.
+
+HOW TO VERIFY AUTHENTICITY INDEPENDENTLY (WITHOUT PROPRIETARY SOFTWARE):
+You do NOT need the Tri-Netra DFIR software to verify the authenticity and
+unaltered status of these files. You may use any standard operating system utility:
+
+1. Microsoft Windows (Command Prompt):
+   certutil -hashfile evidence\<filename> SHA256
+   certutil -hashfile evidence\<filename> MD5
+
+2. Microsoft Windows (PowerShell):
+   Get-FileHash -Algorithm SHA256 evidence\<filename>
+   Get-FileHash -Algorithm MD5 evidence\<filename>
+
+3. Linux / macOS (Terminal):
+   sha256sum evidence/<filename>
+   md5sum evidence/<filename>
+
+EXPECTED HASHES (CROSS-REFERENCE WITH manifest.json AND BSA SECTION 63 CERTIFICATE):
+--------------------------------------------------------------------------------
+File Name:        CARVED_NAL_0089_FRAG.mp4
+Channel:          1
+Extraction Type:  carved_fragment
+Size:             23587 bytes
+Byte/Sector Span: Unallocated Cluster 45000-45256
+Expected MD5:     398c4bf71affcfd6dbeb6bef5e487b45
+Expected SHA-256: be077e09862a931adc58389ac8c3410d47e32c1ed2a79c66a034dc02f5ba4c49
+--------------------------------------------------------------------------------
+File Name:        CH01_20260924_100000.mp4
+Channel:          1
+Extraction Type:  parsed
+Size:             27434 bytes
+Byte/Sector Span: docs\sample_evidentiary_package\case_data\extracted\CH01_20260924_100000.mp4
+Expected MD5:     2db963904b8a519f6e65473297e22aef
+Expected SHA-256: d93ff174e3020c09e766d1fc1137401aeac55b2ee3492c51101570845f110a04
+--------------------------------------------------------------------------------
+
+STANDALONE EVIDENCE PLAYER:
+To review the video files in their native, unconverted elementary bitstream format,
+a self-contained, portable player is bundled under the 'viewer/' directory.
+To launch the player, simply run:
+  - Windows: Double-click 'viewer\launch_viewer.bat'
+  - Linux/macOS: Run 'bash viewer/launch_viewer.sh'
+
+The standalone player decodes directly from memory with zero alteration to evidence.
+================================================================================

@@ -95,3 +95,25 @@ def test_fs_base_clean_interface_without_special_casing():
     assert "hikvision" not in fs_source.lower()
     assert "dahua" not in fs_source.lower()
     assert "hikfat" not in fs_source.lower()
+
+
+def test_hikfat_parser_parses_college_e01():
+    """Validates detection and parsing of the LTCE_College_Hikvision.E01 forensic image when present."""
+    e01_path = os.path.join(os.path.dirname(__file__), "..", "..", "dds", "LTCE_College_Hikvision.E01")
+    if not os.path.exists(e01_path):
+        return
+
+    res = match_signature(e01_path)
+    assert res.matched is True
+    assert res.oem == "Hikvision"
+
+    parser = HikFatParser()
+    vfs = parser.parse(e01_path)
+
+    assert vfs.oem == "Hikvision"
+    assert len(vfs.channels) == 4
+    assert len(vfs.files) == 4
+
+    cam_ids = [c.channel_id for c in vfs.channels]
+    assert sorted(cam_ids) == [1, 2, 3, 4]
+

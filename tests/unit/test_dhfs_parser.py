@@ -48,3 +48,30 @@ def test_dhfs_parser_follows_fs_base_interface():
     """dhfs_parser.py follows the exact same fs_base.py interface with zero special-casing."""
     parser = DhfsParser()
     assert isinstance(parser, fs_base.FileSystemParser)
+
+
+def test_dhfs_parser_parses_real_sample_raw():
+    """Validates parsing of the dahua_dhfs_sample_01.raw forensic image when present."""
+    sample_path = os.path.join(os.path.dirname(__file__), "..", "..", "dds", "dahua_dhfs_sample_01.raw")
+    if not os.path.exists(sample_path):
+        return
+
+    parser = DhfsParser()
+    vfs = parser.parse(sample_path)
+
+    assert vfs.oem == "Dahua"
+    assert len(vfs.channels) == 4
+    assert len(vfs.files) == 5
+
+    cam_names = [c.channel_name for c in vfs.channels]
+    assert "Camera 1" in cam_names
+    assert "Camera 2" in cam_names
+    assert "Camera 4" in cam_names
+    assert "Camera 5" in cam_names
+
+    del_entry = next(f for f in vfs.files if "DEL_CAM-03" in f.file_id)
+    assert del_entry.extraction_type == "carved_fragment"
+    assert del_entry.channel_id == 3
+    assert del_entry.cluster_runs[0].start_sector == 300
+    assert del_entry.cluster_runs[0].sector_count == 20
+

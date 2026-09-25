@@ -24,3 +24,9 @@ DHFS_INDEX_MAGIC = b"DHINDEX"
 # uint64 file_size
 DHFS_INDEX_RECORD_SIZE = 26
 DHFS_INDEX_RECORD_STRUCT = "<HIIIIQ"
+
+# Master Allocation Table in Sector 1 (verified on Dahua DHFS raw disk image samples)
+DHFS_SECTOR1_OFFSET = 512
+DHFS_SECTOR1_ENTRY_SIZE = 64
+DHFS_SECTOR1_ENTRY_STRUCT = "<16sIIQ32s"
+

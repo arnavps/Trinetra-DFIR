@@ -1,8 +1,8 @@
-# UniDVR-Forensics — Technical Architecture Document
+# TriNetra-DFIR — Technical Architecture Document
 
 ## 1. Overview & System Mission
 
-**UniDVR-Forensics** (SIH26150) is an offline, desktop-native forensic acquisition, recovery, and analysis platform designed specifically for surveillance Digital Video Recorders (DVRs) and Network Video Recorders (NVRs).
+**TriNetra-DFIR** (SIH26150) is an offline, desktop-native forensic acquisition, recovery, and analysis platform designed specifically for surveillance Digital Video Recorders (DVRs) and Network Video Recorders (NVRs).
 
 Modern CCTV recorders do not utilize standard operating systems or NTFS/FAT filesystems; instead, they employ proprietary, unfragmented, sector-aligned raw disk formats (such as Hikvision HIKFAT or Dahua DHFS) or raw circular sector buffers. UniDVR-Forensics provides forensic investigators with raw block-level acquisition, proprietary filesystem parsing, NAL-unit frame carving, in-memory stream decoding, AI analytics, and legal compliance drafting under Bharatiya Sakshya Adhiniyam (BSA 2023 Section 63) and ISO/IEC 27037.
 

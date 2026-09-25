@@ -1,8 +1,8 @@
-# UniDVR-Forensics — User Manual & Operational Walkthrough
+# TriNetra-DFIR — User Manual & Operational Walkthrough
 
 ## 1. Introduction
 
-Welcome to **UniDVR-Forensics**, an advanced desktop workstation platform for surveillance DVR/NVR acquisition, unallocated space carving, video decoding, AI analytics, and legal compliance reporting.
+Welcome to **TriNetra-DFIR**, an advanced desktop workstation platform for surveillance DVR/NVR acquisition, unallocated space carving, video decoding, AI analytics, and legal compliance reporting.
 
 ---
 

@@ -266,6 +266,12 @@ class Page6Playback(QWidget):
 
     def _load_active_clip(self, entry: Optional[ExtractedFileEntry]):
         if not entry or not self.session.has_evidence:
+            if self.decoder:
+                try:
+                    self.decoder.close()
+                except Exception:
+                    pass
+                self.decoder = None
             self.empty_widget.setVisible(True)
             self.content_widget.setVisible(False)
             self.timer.stop()
@@ -273,6 +279,12 @@ class Page6Playback(QWidget):
 
         self.timer.stop()
         self.btn_play.setText("▶ Play")
+        if self.decoder:
+            try:
+                self.decoder.close()
+            except Exception:
+                pass
+            self.decoder = None
 
         # Read clip stream bytes directly using shared session reader
         try:

@@ -30,6 +30,7 @@ ENV/
 case_audit.db
 demo_case/
 dds/
+scratch/
 
 # Large AI Model Weights (Tracked via models/manifest.json)
 models/*.onnx

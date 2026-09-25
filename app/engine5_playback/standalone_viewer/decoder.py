@@ -43,6 +43,7 @@ class StreamDecoder:
         self._decoded = False
         self._decode_stream()
 
+
     def _try_decode(self, suffix: str) -> List[np.ndarray]:
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
             tmp_name = tmp.name

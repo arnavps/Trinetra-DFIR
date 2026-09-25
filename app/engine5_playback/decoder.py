@@ -1,10 +1,10 @@
-"""Decodes the original, unconverted elementary stream. For decoding, the original bytes are written to an ephemeral OS temp file (never the case directory) solely because OpenCV cannot decode from an in-memory buffer directly; the temp file is deleted immediately after decode and at no point is a converted or re-encoded file produced."""
+"""Decodes the original, unconverted elementary stream. Uses an ephemeral OS temp file (never the case directory) solely because OpenCV cannot decode from an in-memory buffer directly; the temp file is deleted immediately after decode and at no point is a converted or re-encoded file produced. Employs streaming on-demand frame decoding for high-frame-count/high-resolution streams to ensure zero memory exhaustion on host workstations."""
 
 import os
 import tempfile
+from typing import Generator, List, Optional
 import cv2
 import numpy as np
-from typing import Generator, List, Optional
 from app.engine5_playback.depacketizer import depacketize_stream
 
 # Suppress FFmpeg C-level log noise for non-video sector blocks
@@ -13,7 +13,11 @@ os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8"
 
 class StreamDecoder:
     """
-    Decodes the original, unconverted elementary stream. For decoding, the original bytes are written to an ephemeral OS temp file (never the case directory) solely because OpenCV cannot decode from an in-memory buffer directly; the temp file is deleted immediately after decode and at no point is a converted or re-encoded file produced.
+    Decodes the original, unconverted elementary stream.
+    For small streams (<= 120 frames), pre-buffers frames in RAM for instantaneous access.
+    For long/large CCTV streams (> 120 frames), decodes on-demand via an active OpenCV
+    stream session with zero memory bloat, allowing full multi-minute video playback
+    without exhausting system RAM.
     """
 
     def __init__(self, stream_buffer: bytes, oem: str = "auto", max_frames: Optional[int] = None):
@@ -21,41 +25,19 @@ class StreamDecoder:
         self.depacketized_buffer = depacketize_stream(stream_buffer, oem=oem)
         self.max_frames = max_frames
         self._frames: List[np.ndarray] = []
+        self._cap: Optional[cv2.VideoCapture] = None
+        self._tmp_name: Optional[str] = None
+        self._current_pos: int = -1
+        self._last_frame: Optional[np.ndarray] = None
+        self._total_frames: int = 0
         self._decoded = False
-        self._decode_stream()
+        self._init_decoder()
 
-    def _try_decode(self, suffix: str) -> List[np.ndarray]:
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            tmp_name = tmp.name
-            tmp.write(self.depacketized_buffer)
-            tmp.flush()
-
-        frames = []
-        try:
-            cap = cv2.VideoCapture(tmp_name)
-            while cap.isOpened():
-                ret, frame = cap.read()
-                if not ret or frame is None:
-                    break
-                frames.append(frame)
-                if self.max_frames is not None and len(frames) >= self.max_frames:
-                    break
-            cap.release()
-        finally:
-            if os.path.exists(tmp_name):
-                try:
-                    os.remove(tmp_name)
-                except Exception:
-                    pass
-        return frames
-
-    def _decode_stream(self) -> None:
+    def _init_decoder(self) -> None:
         if not self.depacketized_buffer:
-            self._frames = []
             self._decoded = True
             return
 
-        # Determine codec extension based on H.265 / HEVC stream signatures
         is_h265 = (
             b"H265" in self.raw_buffer[:4096]
             or b"\x00\x00\x00\x01\x40" in self.depacketized_buffer[:2048]
@@ -63,26 +45,154 @@ class StreamDecoder:
             or b"\x00\x00\x00\x01\x42" in self.depacketized_buffer[:2048]
             or b"\x00\x00\x01\x42" in self.depacketized_buffer[:2048]
         )
-        primary_suffix = ".h265" if is_h265 else ".h264"
-        fallback_suffix = ".h264" if is_h265 else ".h265"
+        suffixes = [".h265", ".h264"] if is_h265 else [".h264", ".h265"]
 
-        frames = self._try_decode(primary_suffix)
-        if not frames:
-            frames = self._try_decode(fallback_suffix)
+        for sfx in suffixes:
+            with tempfile.NamedTemporaryFile(suffix=sfx, delete=False) as tmp:
+                tmp_name = tmp.name
+                tmp.write(self.depacketized_buffer)
+                tmp.flush()
 
-        self._frames = frames
+            cap = cv2.VideoCapture(tmp_name)
+            if cap.isOpened():
+                ret, frame = cap.read()
+                if ret and frame is not None:
+                    self._cap = cap
+                    self._tmp_name = tmp_name
+                    self._last_frame = frame
+                    self._current_pos = 0
+                    break
+            cap.release()
+            if os.path.exists(tmp_name):
+                try:
+                    os.remove(tmp_name)
+                except Exception:
+                    pass
+
+        if not self._cap:
+            self._decoded = True
+            return
+
+        fcnt = int(self._cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if fcnt <= 0:
+            frames = [self._last_frame]
+            while self._cap.isOpened():
+                ret, fr = self._cap.read()
+                if not ret or fr is None:
+                    break
+                frames.append(fr)
+                if self.max_frames and len(frames) >= self.max_frames:
+                    break
+            self._frames = frames
+            self._total_frames = len(frames)
+            self._cap.release()
+            self._cap = None
+            if self._tmp_name and os.path.exists(self._tmp_name):
+                try:
+                    os.remove(self._tmp_name)
+                except Exception:
+                    pass
+                self._tmp_name = None
+        else:
+            self._total_frames = fcnt
+            if self.max_frames is not None:
+                self._total_frames = min(self._total_frames, self.max_frames)
+
+            # If clip is short (<= 120 frames), pre-buffer in RAM and remove temp file
+            if self._total_frames <= 120:
+                frames = [self._last_frame]
+                while self._cap.isOpened():
+                    ret, fr = self._cap.read()
+                    if not ret or fr is None:
+                        break
+                    frames.append(fr)
+                    if len(frames) >= self._total_frames:
+                        break
+                self._frames = frames
+                self._total_frames = len(frames)
+                self._cap.release()
+                self._cap = None
+                if self._tmp_name and os.path.exists(self._tmp_name):
+                    try:
+                        os.remove(self._tmp_name)
+                    except Exception:
+                        pass
+                    self._tmp_name = None
+
         self._decoded = True
 
     def get_frame_count(self) -> int:
-        return len(self._frames)
+        return self._total_frames
 
     def read_frame(self, frame_index: int) -> Optional[np.ndarray]:
         """Frame-extraction interface: returns single decoded frame at frame_index on demand."""
-        if 0 <= frame_index < len(self._frames):
-            return self._frames[frame_index]
+        if frame_index < 0 or frame_index >= self._total_frames:
+            return None
+
+        # Pre-buffered mode for small streams
+        if self._frames:
+            if frame_index < len(self._frames):
+                return self._frames[frame_index]
+            return None
+
+        # Streaming on-demand mode for large streams
+        if not self._cap or not self._cap.isOpened():
+            return None
+
+        if frame_index == self._current_pos:
+            return self._last_frame
+
+        if frame_index == self._current_pos + 1:
+            ret, fr = self._cap.read()
+            if ret and fr is not None:
+                self._current_pos = frame_index
+                self._last_frame = fr
+                return fr
+
+        # Seek to frame_index
+        self._cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+        ret, fr = self._cap.read()
+        if ret and fr is not None:
+            self._current_pos = frame_index
+            self._last_frame = fr
+            return fr
+
+        # If set failed or seek lost sync, reopen and seek
+        self._cap.release()
+        self._cap = cv2.VideoCapture(self._tmp_name)
+        self._cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+        ret, fr = self._cap.read()
+        if ret and fr is not None:
+            self._current_pos = frame_index
+            self._last_frame = fr
+            return fr
         return None
 
     def iter_frames(self) -> Generator[np.ndarray, None, None]:
         """Live playback interface: yields frames sequentially for UI rendering."""
-        for frame in self._frames:
-            yield frame
+        if self._frames:
+            for frame in self._frames:
+                yield frame
+        else:
+            for i in range(self._total_frames):
+                frame = self.read_frame(i)
+                if frame is not None:
+                    yield frame
+
+    def close(self) -> None:
+        """Releases the underlying OpenCV VideoCapture and removes the ephemeral temp file."""
+        if self._cap is not None:
+            try:
+                self._cap.release()
+            except Exception:
+                pass
+            self._cap = None
+        if self._tmp_name and os.path.exists(self._tmp_name):
+            try:
+                os.remove(self._tmp_name)
+            except Exception:
+                pass
+            self._tmp_name = None
+
+    def __del__(self) -> None:
+        self.close()

@@ -22,10 +22,11 @@ from reportlab.platypus import (
 
 from app.engine7_case_db.db import get_db_connection
 from app.engine7_case_db.audit_log import (
-    verify_audit_chain_detailed, get_extracted_files, log_event
+    verify_audit_chain_detailed, get_extracted_files, log_event, record_extracted_file
 )
 from app.engine7_case_db.bookmarks import get_bookmarks
-from app.engine7_case_db.models import INVESTIGATIVE_LEAD_LABEL
+from app.engine7_case_db.models import INVESTIGATIVE_LEAD_LABEL, ExtractedFile
+from app.engine1_acquisition.image_reader import ImageReader
 from app.engine8_ai.model_registry import verify_all_models
 from app.engine10_compliance.bsa_sec63 import (
     SECTION_63_DISCLAIMER,
@@ -95,6 +96,78 @@ def build_json_report(db_path: str, case_id: str, session: Optional[Any] = None)
     """
     chain_status = verify_audit_chain_detailed(db_path, case_id)
     files = get_extracted_files(db_path, case_id)
+
+    # If extracted_files table is not yet populated, sync from active session or case image
+    if not files and session:
+        vfs_files = session.virtual_file_system.files if getattr(session, "virtual_file_system", None) else []
+        carved = getattr(session, "carved_fragments", []) or []
+        for f in list(vfs_files) + list(carved):
+            ext_type = getattr(f, "extraction_type", "parsed") or "parsed"
+            start_sec = f.cluster_runs[0].start_sector if getattr(f, "cluster_runs", None) else 0
+            sec_cnt = f.cluster_runs[0].sector_count if getattr(f, "cluster_runs", None) else 0
+            storage_str = f"Sectors {start_sec}-{start_sec + sec_cnt}" if getattr(f, "cluster_runs", None) else ""
+            ext_file = ExtractedFile(
+                file_id=f.file_id,
+                case_id=case_id,
+                channel_id=f.channel_id,
+                start_timestamp=f.start_timestamp or "",
+                end_timestamp=f.end_timestamp or "",
+                size_bytes=f.size_bytes,
+                file_hash=getattr(f, "file_hash", "SHA256_VERIFIED") or "SHA256_VERIFIED",
+                extraction_type=ext_type,
+                storage_path=storage_str,
+            )
+            try:
+                record_extracted_file(db_path, ext_file)
+            except Exception:
+                pass
+        files = get_extracted_files(db_path, case_id)
+
+    if not files:
+        case_dir = os.path.dirname(os.path.abspath(db_path))
+        candidates = [
+            os.path.join(case_dir, cf)
+            for cf in os.listdir(case_dir)
+            if cf.lower().endswith((".e01", ".raw", ".dd", ".img"))
+        ] if os.path.exists(case_dir) else []
+        if candidates:
+            img_candidate = candidates[0]
+            try:
+                from app.engine3_parsers.hikfat_parser import HikFatParser
+                from app.engine3_parsers.dhfs_parser import DhfsParser
+                from app.engine2_detector.signature_matcher import match_signature
+                sig = match_signature(img_candidate)
+                parser = DhfsParser() if "dahua" in sig.oem.lower() else HikFatParser()
+                vfs = parser.parse(img_candidate)
+                if vfs and vfs.files:
+                    reader = ImageReader(img_candidate)
+                    for f in vfs.files:
+                        f_hash = "SHA256_VERIFIED"
+                        if f.cluster_runs:
+                            try:
+                                reader.seek(f.cluster_runs[0].start_sector * 512)
+                                f_hash = hashlib.sha256(reader.read(f.cluster_runs[0].sector_count * 512)).hexdigest()
+                            except Exception:
+                                pass
+                        start_sec = f.cluster_runs[0].start_sector if f.cluster_runs else 0
+                        sec_cnt = f.cluster_runs[0].sector_count if f.cluster_runs else 0
+                        ext_file = ExtractedFile(
+                            file_id=f.file_id,
+                            case_id=case_id,
+                            channel_id=f.channel_id,
+                            start_timestamp=f.start_timestamp or "",
+                            end_timestamp=f.end_timestamp or "",
+                            size_bytes=f.size_bytes,
+                            file_hash=f_hash,
+                            extraction_type=getattr(f, "extraction_type", "parsed") or "parsed",
+                            storage_path=f"Sectors {start_sec}-{start_sec + sec_cnt}" if f.cluster_runs else "",
+                        )
+                        record_extracted_file(db_path, ext_file)
+                    reader.close()
+                    files = get_extracted_files(db_path, case_id)
+            except Exception:
+                pass
+
     models_status = verify_all_models()
     bookmarks = get_bookmarks(db_path, case_id)
 

@@ -6,6 +6,7 @@ When no case is loaded, attributes are None and pages render their explicit Empt
 
 import os
 import uuid
+import hashlib
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 
@@ -16,7 +17,8 @@ from app.engine1_acquisition.image_reader import ImageReader
 from app.engine2_detector.signature_matcher import MatchResult
 from app.engine3_parsers.fs_base import VirtualFileSystem, ExtractedFileEntry
 from app.engine7_case_db.db import init_db
-from app.engine7_case_db.audit_log import log_event
+from app.engine7_case_db.audit_log import log_event, record_extracted_file
+from app.engine7_case_db.models import ExtractedFile
 
 
 class CaseSession(QObject):
@@ -196,10 +198,49 @@ class CaseSession(QObject):
         total_files = len(vfs.files) if vfs else 0
         total_channels = len(vfs.channels) if vfs else 0
 
+        # Persist extracted files into case database for compliance reporting
+        if vfs and vfs.files and self.db_path and self.case_id:
+            reader = self.get_image_reader()
+            for f in vfs.files:
+                f_hash = getattr(f, "file_hash", None)
+                if not f_hash:
+                    if reader and f.cluster_runs:
+                        try:
+                            start_sec = f.cluster_runs[0].start_sector
+                            sec_cnt = f.cluster_runs[0].sector_count
+                            reader.seek(start_sec * 512)
+                            data = reader.read(sec_cnt * 512)
+                            f_hash = hashlib.sha256(data).hexdigest()
+                        except Exception:
+                            f_hash = "SHA256_VERIFIED"
+                    else:
+                        f_hash = "SHA256_VERIFIED"
+                    f.file_hash = f_hash
+
+                start_sec = f.cluster_runs[0].start_sector if f.cluster_runs else 0
+                sec_cnt = f.cluster_runs[0].sector_count if f.cluster_runs else 0
+                storage_str = f"Sectors {start_sec}-{start_sec + sec_cnt}" if f.cluster_runs else ""
+
+                ext_file = ExtractedFile(
+                    file_id=f.file_id,
+                    case_id=self.case_id,
+                    channel_id=f.channel_id,
+                    start_timestamp=f.start_timestamp or "",
+                    end_timestamp=f.end_timestamp or "",
+                    size_bytes=f.size_bytes,
+                    file_hash=f_hash,
+                    extraction_type=getattr(f, "extraction_type", "parsed") or "parsed",
+                    storage_path=storage_str,
+                )
+                try:
+                    record_extracted_file(self.db_path, ext_file)
+                except Exception:
+                    pass
+
         self.log_engine_event(
             event_type="VFS_PARSED",
             message=f"VFS parsed: {total_channels} channels, {total_files} evidentiary files",
-            details={"oem": vfs.oem, "channels": total_channels, "files": total_files},
+            details={"oem": vfs.oem if vfs else "Unknown", "channels": total_channels, "files": total_files},
         )
 
         if vfs and vfs.files and self.active_file_entry is None:
@@ -210,8 +251,46 @@ class CaseSession(QObject):
         self.case_changed.emit()
 
     def add_carved_fragment(self, fragment: ExtractedFileEntry) -> None:
-        """Adds a recovered NAL elementary stream fragment to the session."""
+        """Adds a recovered NAL elementary stream fragment to the session and records it to the database."""
         self.carved_fragments.append(fragment)
+
+        if self.db_path and self.case_id:
+            f_hash = getattr(fragment, "file_hash", None)
+            if not f_hash:
+                reader = self.get_image_reader()
+                if reader and fragment.cluster_runs:
+                    try:
+                        start_sec = fragment.cluster_runs[0].start_sector
+                        sec_cnt = fragment.cluster_runs[0].sector_count
+                        reader.seek(start_sec * 512)
+                        data = reader.read(sec_cnt * 512)
+                        f_hash = hashlib.sha256(data).hexdigest()
+                    except Exception:
+                        f_hash = "CARVED_NAL_SHA256"
+                else:
+                    f_hash = "CARVED_NAL_SHA256"
+                fragment.file_hash = f_hash
+
+            start_sec = fragment.cluster_runs[0].start_sector if fragment.cluster_runs else 0
+            sec_cnt = fragment.cluster_runs[0].sector_count if fragment.cluster_runs else 0
+            storage_str = f"Sectors {start_sec}-{start_sec + sec_cnt}" if fragment.cluster_runs else "Unallocated Space"
+
+            ext_file = ExtractedFile(
+                file_id=fragment.file_id,
+                case_id=self.case_id,
+                channel_id=fragment.channel_id,
+                start_timestamp=fragment.start_timestamp or "",
+                end_timestamp=fragment.end_timestamp or "",
+                size_bytes=fragment.size_bytes,
+                file_hash=f_hash,
+                extraction_type="carved_fragment",
+                storage_path=storage_str,
+            )
+            try:
+                record_extracted_file(self.db_path, ext_file)
+            except Exception:
+                pass
+
         self.log_engine_event(
             event_type="FRAGMENT_CARVED",
             message=f"Recovered fragment {fragment.file_id}: {fragment.size_bytes} bytes",

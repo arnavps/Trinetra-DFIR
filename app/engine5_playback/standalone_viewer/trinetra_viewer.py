@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QSplitter, QFrame, QComboBox, QMessageBox, QStatusBar
 )
 
+import cv2
 import numpy as np
 
 # Standalone local decoder
@@ -132,7 +133,8 @@ class StandaloneEvidenceViewer(QMainWindow):
         self.resize(1100, 720)
         self.setStyleSheet(DARK_STYLE)
 
-        self.frames: List[np.ndarray] = []
+        self.decoder: Optional[StreamDecoder] = None
+        self.total_frames: int = 0
         self.current_frame_idx: int = 0
         self.is_playing: bool = False
         self.fps: float = 25.0
@@ -329,15 +331,22 @@ class StandaloneEvidenceViewer(QMainWindow):
             self.load_file(fpath)
 
     def load_file(self, file_path: str):
-        """Loads and in-memory decodes an original evidentiary stream file."""
+        """Loads and in-memory decodes an original evidentiary stream file without converting bytes."""
         if not os.path.exists(file_path):
             QMessageBox.critical(self, "File Not Found", f"Cannot find evidence file: {file_path}")
             return
 
         self.stop()
+        if self.decoder:
+            try:
+                self.decoder.close()
+            except Exception:
+                pass
+            self.decoder = None
+
         self.current_file_path = file_path
         fname = os.path.basename(file_path)
-        self.status_bar.showMessage(f"Hashing & decoding {fname} in memory...")
+        self.status_bar.showMessage(f"Hashing & opening {fname} in memory...")
         QApplication.processEvents()
 
         # Compute live SHA-256 and MD5 directly from raw file bytes
@@ -350,11 +359,11 @@ class StandaloneEvidenceViewer(QMainWindow):
         calc_sha256 = sha256.hexdigest()
         calc_md5 = md5.hexdigest()
 
-        # In-memory decoding using StreamDecoder
-        decoder = StreamDecoder(raw_bytes)
-        self.frames = decoder.get_frames()
+        # In-memory ephemeral stream decode (streaming on-demand, zero RAM bloat)
+        self.decoder = StreamDecoder(raw_bytes)
+        self.total_frames = self.decoder.get_frame_count()
 
-        if not self.frames:
+        if self.total_frames == 0:
             self.lbl_video.setText(f"Unable to decode frames from:\n{fname}\n(Raw bitstream header unparseable)")
             self.slider.setRange(0, 0)
             self.lbl_frames.setText("Frame 0 / 0")
@@ -362,53 +371,58 @@ class StandaloneEvidenceViewer(QMainWindow):
             return
 
         self.current_frame_idx = 0
-        self.slider.setRange(0, len(self.frames) - 1)
+        self.slider.blockSignals(True)
+        self.slider.setRange(0, max(0, self.total_frames - 1))
         self.slider.setValue(0)
+        self.slider.blockSignals(False)
+
         self._display_current_frame()
 
         self.status_bar.showMessage(
-            f"EVIDENCE: {fname} ({len(self.frames)} frames) | SHA-256: {calc_sha256} | MD5: {calc_md5}"
+            f"EVIDENCE: {fname} ({self.total_frames} frames) | SHA-256: {calc_sha256} | MD5: {calc_md5}"
         )
 
     def _display_current_frame(self):
-        if not self.frames or self.current_frame_idx >= len(self.frames):
+        if not self.decoder or self.total_frames == 0:
+            return
+        if self.current_frame_idx < 0 or self.current_frame_idx >= self.total_frames:
             return
 
-        frame = self.frames[self.current_frame_idx]
+        frame = self.decoder.read_frame(self.current_frame_idx)
+        if frame is None:
+            return
+
         h, w = frame.shape[:2]
 
-        # Convert BGR (OpenCV) to RGB for Qt
-        rgb_frame = frame[:, :, ::-1].copy()
-        bytes_per_line = 3 * w
-        q_img = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-
-        # Scale to canvas size preserving aspect ratio
+        # Fast OpenCV scaling to target canvas preserving aspect ratio
         canvas_size = self.canvas_frame.size()
-        pixmap = QPixmap.fromImage(q_img).scaled(
-            canvas_size.width() - 10,
-            canvas_size.height() - 10,
-            Qt.KeepAspectRatio,
-            Qt.SmoothTransformation
-        )
-        self.lbl_video.setPixmap(pixmap)
+        target_w = max(10, canvas_size.width() - 10)
+        target_h = max(10, canvas_size.height() - 10)
+        scale = min(target_w / w, target_h / h)
+        new_w = max(1, int(w * scale))
+        new_h = max(1, int(h * scale))
+
+        resized = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+        q_img = QImage(rgb.data, new_w, new_h, 3 * new_w, QImage.Format.Format_RGB888)
+        self.lbl_video.setPixmap(QPixmap.fromImage(q_img))
 
         # Update counter & timestamp
-        total = len(self.frames)
-        self.lbl_frames.setText(f"Frame {self.current_frame_idx + 1} / {total}")
+        self.lbl_frames.setText(f"Frame {self.current_frame_idx + 1} / {self.total_frames}")
 
-        seconds = self.current_frame_idx / self.fps
+        seconds = self.current_frame_idx / max(1.0, self.fps)
         m, s = divmod(seconds, 60)
         h_val, m = divmod(m, 60)
         millis = int((seconds - int(seconds)) * 1000)
         self.lbl_time.setText(f"{int(h_val):02d}:{int(m):02d}:{int(s):02d}.{millis:03d}")
 
     def _on_slider_moved(self, value: int):
-        if 0 <= value < len(self.frames):
+        if self.decoder and 0 <= value < self.total_frames:
             self.current_frame_idx = value
             self._display_current_frame()
 
     def toggle_play(self):
-        if not self.frames:
+        if not self.decoder or self.total_frames == 0:
             return
         if self.is_playing:
             self.pause()
@@ -416,11 +430,11 @@ class StandaloneEvidenceViewer(QMainWindow):
             self.play()
 
     def play(self):
-        if not self.frames:
+        if not self.decoder or self.total_frames == 0:
             return
         self.is_playing = True
         self.btn_play.setText("⏸ Pause")
-        interval_ms = int(1000.0 / self.fps)
+        interval_ms = max(5, int(1000.0 / self.fps))
         self.timer.start(interval_ms)
 
     def pause(self):
@@ -431,33 +445,41 @@ class StandaloneEvidenceViewer(QMainWindow):
     def stop(self):
         self.pause()
         self.current_frame_idx = 0
-        if self.frames:
+        if self.total_frames > 0:
+            self.slider.blockSignals(True)
             self.slider.setValue(0)
+            self.slider.blockSignals(False)
             self._display_current_frame()
 
     def step_forward(self):
         self.pause()
-        if self.frames and self.current_frame_idx < len(self.frames) - 1:
+        if self.decoder and self.current_frame_idx < self.total_frames - 1:
             self.current_frame_idx += 1
+            self.slider.blockSignals(True)
             self.slider.setValue(self.current_frame_idx)
+            self.slider.blockSignals(False)
             self._display_current_frame()
 
     def step_backward(self):
         self.pause()
-        if self.frames and self.current_frame_idx > 0:
+        if self.decoder and self.current_frame_idx > 0:
             self.current_frame_idx -= 1
+            self.slider.blockSignals(True)
             self.slider.setValue(self.current_frame_idx)
+            self.slider.blockSignals(False)
             self._display_current_frame()
 
     def _on_timer_tick(self):
-        if not self.frames:
+        if not self.decoder or self.total_frames == 0:
             self.stop()
             return
-        if self.current_frame_idx >= len(self.frames) - 1:
+        if self.current_frame_idx >= self.total_frames - 1:
             self.stop()
             return
         self.current_frame_idx += 1
+        self.slider.blockSignals(True)
         self.slider.setValue(self.current_frame_idx)
+        self.slider.blockSignals(False)
         self._display_current_frame()
 
     def _on_speed_changed(self, speed_str: str):
@@ -465,6 +487,16 @@ class StandaloneEvidenceViewer(QMainWindow):
         self.fps = 25.0 * mult
         if self.is_playing:
             self.timer.setInterval(max(5, int(1000.0 / self.fps)))
+
+    def closeEvent(self, event):
+        self.stop()
+        if self.decoder:
+            try:
+                self.decoder.close()
+            except Exception:
+                pass
+            self.decoder = None
+        super().closeEvent(event)
 
 
 def main():
